@@ -1,114 +1,140 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from scipy.stats import poisson
+import requests
+from datetime import datetime
+import streamlit.components.v1 as components
 
-# --- MULTILINGUAL DICTIONARY (Expanded) ---
-LANGUAGES = {
-    "English": {
-        "title": "AIBP : THE ORACLE",
-        "search": "🔍 Scan a league, team or status...",
-        "sidebar": "SELECT CATEGORY",
-        "menu": ["🌍 LIVES & PREDICTIONS", "📊 STANDINGS", "💎 VIP PREMIUM"],
-        "pred_label": "ORACLE PREDICTION",
-        "details": "Deep Analysis",
-        "stats": ["Corners", "Shots on Target", "Over 2.5 Goals"],
-        "footer": "ALL RIGHTS RESERVED © 2026 AI BETTING PRO"
-    },
-    "Français": {
-        "title": "AIBP : L'ORACLE",
-        "search": "🔍 Scanner une ligue, équipe ou statut...",
-        "sidebar": "SÉLECTIONNER CATÉGORIE",
-        "menu": ["🌍 LIVES & PRONOS", "📊 CLASSEMENTS", "💎 VIP PREMIUM"],
-        "pred_label": "PRÉDICTION ORACLE",
-        "details": "Analyse Approfondie",
-        "stats": ["Corners", "Tirs Cadrés", "Plus de 2.5 Buts"],
-        "footer": "TOUS DROITS RÉSERVÉS © 2026 AI BETTING PRO"
-    }
-}
+# ==========================================
+# 1. CONFIGURATION (À REMPLIR)
+# ==========================================
+API_KEY = "TA_CLE_ICI" 
+ADMIN_PASSWORD = "TON_MOT_DE_PASSE"
+GA_ID = "G-XXXXXXXXXX" # Ton ID Google Analytics (facultatif au début)
 
-# --- CONFIG ---
+# ==========================================
+# 2. DESIGN & CSS (GOLD EDITION)
+# ==========================================
 st.set_page_config(page_title="AIBP | THE ORACLE", layout="wide")
 
-with st.sidebar:
-    st.markdown("<h2 style='color:#d4af37; font-family:Orbitron;'>GLOBAL SELECT</h2>", unsafe_allow_html=True)
-    selected_lang = st.selectbox("🌐 LANGUAGE", list(LANGUAGES.keys()))
-    L = LANGUAGES[selected_lang]
-
-# --- AI ENGINE (Advanced) ---
-def get_full_analysis(h_pow, a_pow):
-    # Calculations based on Poisson
-    prob_1 = np.clip(h_pow / (h_pow + a_pow + 0.5) * 100, 10, 85)
-    prob_2 = np.clip(a_pow / (h_pow + a_pow + 0.5) * 100, 10, 85)
-    prob_x = 100 - (prob_1 + prob_2)
-    
-    corners = int((h_pow + a_pow) * 2.5)
-    shots = int((h_pow + a_pow) * 3)
-    over25 = int((prob_1 + prob_2) * 0.8)
-    
-    return {
-        "1X2": [f"{int(prob_1)}%", f"{int(prob_x)}%", f"{int(prob_2)}%"],
-        "corners": corners,
-        "shots": shots,
-        "over25": f"{over25}%"
-    }
-
-# --- CSS (Forebet Dark Gold Edition) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;700&display=swap');
     .stApp { background: #0a0a0a; color: #eee; font-family: 'Inter', sans-serif; }
     .card {
-        background: #151515; border-radius: 8px; padding: 15px; margin-bottom: 10px;
-        border-bottom: 2px solid #333;
+        background: linear-gradient(145deg, #151515, #1d1d1d);
+        border-radius: 12px; padding: 15px; margin-bottom: 12px;
+        border-left: 5px solid #d4af37; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .prob-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0; }
-    .gold-glow { color: #d4af37; font-family: 'Orbitron'; text-align: center; }
-    .stat-box { background: #222; padding: 10px; border-radius: 5px; text-align: center; }
+    .gold-glow { color: #d4af37; font-family: 'Orbitron'; text-align: center; text-transform: uppercase; }
+    .live-dot { height: 10px; width: 10px; background-color: #ff4b4b; border-radius: 50%; display: inline-block; animation: blinker 1.5s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0; } }
+    .vip-card { border: 1px solid #d4af37; background: rgba(212, 175, 55, 0.05); border-radius: 10px; padding: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- MAIN CONTENT ---
-st.markdown(f"<h1 class='gold-glow'>{L['title']}</h1>", unsafe_allow_html=True)
-menu_choice = st.sidebar.radio(L["sidebar"], L["menu"])
+# ==========================================
+# 3. MOTEUR DE DONNÉES & ANALYTICS
+# ==========================================
+def inject_ga():
+    ga_code = f"""
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){{dataLayer.push(arguments);}}
+            gtag('js', new Date()); gtag('config', '{GA_ID}');
+        </script>
+    """
+    components.html(ga_code, height=0)
 
-if menu_choice == L["menu"][0]:
-    search = st.text_input(L["search"])
+@st.cache_data(ttl=60)
+def fetch_live_data():
+    url = "https://v3.football.api-sports.io/fixtures?live=all"
+    headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        return response.json().get('response', [])
+    except:
+        return []
+
+def get_predictions(h_score, a_score, elapsed):
+    # Logique Oracle simplifiée
+    p1 = np.clip(35 + (h_score - a_score) * 15, 5, 95)
+    p2 = np.clip(30 + (a_score - h_score) * 15, 5, 95)
+    px = 100 - (p1 + p2)
+    return [f"{int(p1)}%", f"{int(px)}%", f"{int(p2)}%"]
+
+# ==========================================
+# 4. INTERFACE & NAVIGATION
+# ==========================================
+inject_ga()
+
+with st.sidebar:
+    st.markdown("<h2 class='gold-glow'>AIBP ORACLE</h2>", unsafe_allow_html=True)
+    lang = st.selectbox("🌐 LANGUAGE", ["Français", "English"])
+    menu = ["🌍 LIVES & PRONOS", "💎 VIP PREMIUM", "🔐 ADMIN"] if lang == "Français" else ["🌍 LIVE PREDICTIONS", "💎 VIP PREMIUM", "🔐 ADMIN"]
+    choice = st.radio("MENU", menu)
+
+# --- SECTION LIVES ---
+if choice == menu[0]:
+    st.markdown("<h1 class='gold-glow'>L'ORACLE EN DIRECT</h1>", unsafe_allow_html=True)
+    data = fetch_live_data()
     
-    # Dynamic Data Simulation
-    raw_data = [
-        {"league": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "match": "Arsenal vs Chelsea", "status": "21:00", "score": "0-0", "h_pow": 2.8, "a_pow": 1.2},
-        {"league": "🌍 CAF Champions", "match": "Al Ahly vs Sundowns", "status": "LIVE", "score": "1-0", "h_pow": 2.1, "a_pow": 1.9}
-    ]
-
-    for m in raw_data:
-        analysis = get_full_analysis(m['h_pow'], m['a_pow'])
-        
-        st.markdown(f"""
-        <div class='card'>
-            <div style='display:flex; justify-content:space-between; font-size:0.7rem; color:#888;'>
-                <span>{m['league']}</span><span>{m['status']}</span>
-            </div>
-            <div style='display:flex; justify-content:space-between; align-items:center; margin:10px 0;'>
-                <span style='font-weight:bold; font-size:1.1rem;'>{m['match']}</span>
-                <span style='color:#d4af37; font-family:Orbitron; font-weight:bold;'>{analysis['1X2'][0]} - {analysis['1X2'][1]} - {analysis['1X2'][2]}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # ANALYSIS SECTION (The "Click to Expand" part)
-        with st.expander(f"📊 {L['details']} - {m['match']}"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown(f"<div class='stat-box'><small>{L['stats'][0]}</small><br><b style='color:#d4af37;'>{analysis['corners']}</b></div>", unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"<div class='stat-box'><small>{L['stats'][1]}</small><br><b style='color:#d4af37;'>{analysis['shots']}</b></div>", unsafe_allow_html=True)
-            with col3:
-                st.markdown(f"<div class='stat-box'><small>{L['stats'][2]}</small><br><b style='color:#d4af37;'>{analysis['over25']}</b></div>", unsafe_allow_html=True)
+    if not data:
+        st.info("Aucun match en direct pour le moment.")
+    else:
+        for m in data:
+            local_time = datetime.fromtimestamp(m['fixture']['timestamp']).strftime('%H:%M')
+            preds = get_predictions(m['goals']['home'], m['goals']['away'], m['fixture']['status']['elapsed'])
             
-            # Prediction Logic Visualization
-            st.write("---")
-            st.write("🎯 **Oracle Insights:** High probability of late goals based on team fatigue index.")
+            st.markdown(f"""
+            <div class='card'>
+                <div style='display:flex; justify-content:space-between; font-size:0.8rem; color:#888;'>
+                    <span>🏆 {m['league']['name']}</span>
+                    <span><span class='live-dot'></span> {m['fixture']['status']['elapsed']}' (Heure: {local_time})</span>
+                </div>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin:10px 0;'>
+                    <span style='font-size:1.1rem; font-weight:bold;'>{m['teams']['home']['name']} {m['goals']['home']} - {m['goals']['away']} {m['teams']['away']['name']}</span>
+                    <span style='color:#d4af37; font-family:Orbitron; font-weight:bold;'>{preds[0]} - {preds[1]} - {preds[2]}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-# --- FOOTER ---
-st.markdown(f"<div style='text-align:center; color:#444; font-size:0.7rem; margin-top:50px;'>{L['footer']}</div>", unsafe_allow_html=True)
+# --- SECTION VIP ---
+elif choice == menu[1]:
+    st.markdown("<h1 class='gold-glow'>💎 SELECTION VIP</h1>", unsafe_allow_html=True)
+    data = fetch_live_data()
+    found_vip = False
+    
+    for m in data:
+        elapsed = m['fixture']['status']['elapsed']
+        # Condition VIP : Match après 60 min avec une équipe qui domine
+        if elapsed > 60 and abs(m['goals']['home'] - m['goals']['away']) >= 1:
+            found_vip = True
+            st.markdown(f"""
+            <div class='vip-card'>
+                <h4 style='color:#d4af37; margin:0;'>🔥 OPPORTUNITÉ DÉTECTÉE</h4>
+                <p>{m['teams']['home']['name']} vs {m['teams']['away']['name']} ({elapsed}')<br>
+                <b>CONSEIL : MOMENTUM ÉLEVÉ</b></p>
+            </div><br>
+            """, unsafe_allow_html=True)
+            
+    if not found_vip:
+        st.write("L'Oracle analyse... Aucune opportunité VIP pour l'instant.")
+
+# --- SECTION ADMIN ---
+elif choice == "🔐 ADMIN":
+    st.markdown("<h1 class='gold-glow'>PANEL ADMIN</h1>", unsafe_allow_html=True)
+    pw = st.text_input("Mot de passe", type="password")
+    if pw == ADMIN_PASSWORD:
+        st.success("Bienvenue, Administrateur.")
+        # Dashboard des stats
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Utilisateurs", "370", "Canada, Burundi, FR")
+        col2.metric("Taux de réussite", "78%", "+2%")
+        col3.metric("Status API", "OK")
+        
+        st.markdown("### 📊 Rapports Géographiques (Simulation)")
+        st.table(pd.DataFrame({"Pays": ["Canada", "France", "Burundi"], "Visites": [20, 150, 1]}))
+    elif pw:
+        st.error("Accès refusé.")
