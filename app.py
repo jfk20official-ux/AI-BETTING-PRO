@@ -1,4 +1,14 @@
-import streamlit as st
+st.markdown("""
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a3c6d">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js');
+            });
+        }
+    </script>
+""", unsafe_allow_html=True)import streamlit as st
 import pandas as pd
 from datetime import datetime
 
