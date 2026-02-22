@@ -1,140 +1,102 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import requests
-from datetime import datetime
-import streamlit.components.v1 as components
+from datetime import datetime, timedelta
 
 # ==========================================
-# 1. CONFIGURATION (À REMPLIR)
+# 1. CONFIGURATION PRIVÉE (À REMPLIR)
 # ==========================================
 API_KEY = "80da65258a3809f6c7ad2c74930ceb90" 
 ADMIN_PASSWORD = "Tunga25721204301"
-GA_ID = "G-XXXXXXXXXX" # Ton ID Google Analytics (facultatif au début)
+WHATSAPP_LINK = "https://wa.me/TON_NUMERO"
+
+# --- GESTION DU CODE PROMO ---
+# Tu peux changer "JFK20" par n'importe quel autre code ici
+PROMO_CODE_ACTIF = "JFK20" 
+
+# Délais des Packs (en jours)
+DUREE_SILVER = 7
+DUREE_GOLD = 30
+DUREE_VIP = 90
 
 # ==========================================
-# 2. DESIGN & CSS (GOLD EDITION)
+# 2. STYLE ET POLICE DISCRÈTE (14px)
 # ==========================================
-st.set_page_config(page_title="AIBP | THE ORACLE", layout="wide")
+st.set_page_config(page_title="L'Oracle AI", layout="wide")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;700&display=swap');
-    .stApp { background: #0a0a0a; color: #eee; font-family: 'Inter', sans-serif; }
-    .card {
-        background: linear-gradient(145deg, #151515, #1d1d1d);
-        border-radius: 12px; padding: 15px; margin-bottom: 12px;
-        border-left: 5px solid #d4af37; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    html, body, [class*="css"] {
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 14px;
+        color: #e0e0e0;
     }
-    .gold-glow { color: #d4af37; font-family: 'Orbitron'; text-align: center; text-transform: uppercase; }
-    .live-dot { height: 10px; width: 10px; background-color: #ff4b4b; border-radius: 50%; display: inline-block; animation: blinker 1.5s linear infinite; }
-    @keyframes blinker { 50% { opacity: 0; } }
-    .vip-card { border: 1px solid #d4af37; background: rgba(212, 175, 55, 0.05); border-radius: 10px; padding: 15px; }
+    .main { background-color: #0e1117; }
+    .gold-glow {
+        color: #D4AF37;
+        text-shadow: 0px 0px 8px rgba(212, 175, 55, 0.4);
+    }
+    .footer {
+        position: fixed; left: 0; bottom: 0; width: 100%;
+        background-color: rgba(14, 17, 23, 0.9);
+        color: #555; text-align: center; padding: 5px; font-size: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. MOTEUR DE DONNÉES & ANALYTICS
+# 3. LOGIQUE D'EXPIRATION
 # ==========================================
-def inject_ga():
-    ga_code = f"""
-        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){{dataLayer.push(arguments);}}
-            gtag('js', new Date()); gtag('config', '{GA_ID}');
-        </script>
-    """
-    components.html(ga_code, height=0)
-
-@st.cache_data(ttl=60)
-def fetch_live_data():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-    headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
+def check_expiry(start_date_str, category):
+    durations = {"SILVER": DUREE_SILVER, "GOLD": DUREE_GOLD, "VIP": DUREE_VIP}
+    days = durations.get(category, 7)
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        return response.json().get('response', [])
-    except:
-        return []
-
-def get_predictions(h_score, a_score, elapsed):
-    # Logique Oracle simplifiée
-    p1 = np.clip(35 + (h_score - a_score) * 15, 5, 95)
-    p2 = np.clip(30 + (a_score - h_score) * 15, 5, 95)
-    px = 100 - (p1 + p2)
-    return [f"{int(p1)}%", f"{int(px)}%", f"{int(p2)}%"]
-
-# ==========================================
-# 4. INTERFACE & NAVIGATION
-# ==========================================
-inject_ga()
-
-with st.sidebar:
-    st.markdown("<h2 class='gold-glow'>AIBP ORACLE</h2>", unsafe_allow_html=True)
-    lang = st.selectbox("🌐 LANGUAGE", ["Français", "English"])
-    menu = ["🌍 LIVES & PRONOS", "💎 VIP PREMIUM", "🔐 ADMIN"] if lang == "Français" else ["🌍 LIVE PREDICTIONS", "💎 VIP PREMIUM", "🔐 ADMIN"]
-    choice = st.radio("MENU", menu)
-
-# --- SECTION LIVES ---
-if choice == menu[0]:
-    st.markdown("<h1 class='gold-glow'>L'ORACLE EN DIRECT</h1>", unsafe_allow_html=True)
-    data = fetch_live_data()
-    
-    if not data:
-        st.info("Aucun match en direct pour le moment.")
-    else:
-        for m in data:
-            local_time = datetime.fromtimestamp(m['fixture']['timestamp']).strftime('%H:%M')
-            preds = get_predictions(m['goals']['home'], m['goals']['away'], m['fixture']['status']['elapsed'])
-            
-            st.markdown(f"""
-            <div class='card'>
-                <div style='display:flex; justify-content:space-between; font-size:0.8rem; color:#888;'>
-                    <span>🏆 {m['league']['name']}</span>
-                    <span><span class='live-dot'></span> {m['fixture']['status']['elapsed']}' (Heure: {local_time})</span>
-                </div>
-                <div style='display:flex; justify-content:space-between; align-items:center; margin:10px 0;'>
-                    <span style='font-size:1.1rem; font-weight:bold;'>{m['teams']['home']['name']} {m['goals']['home']} - {m['goals']['away']} {m['teams']['away']['name']}</span>
-                    <span style='color:#d4af37; font-family:Orbitron; font-weight:bold;'>{preds[0]} - {preds[1]} - {preds[2]}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# --- SECTION VIP ---
-elif choice == menu[1]:
-    st.markdown("<h1 class='gold-glow'>💎 SELECTION VIP</h1>", unsafe_allow_html=True)
-    data = fetch_live_data()
-    found_vip = False
-    
-    for m in data:
-        elapsed = m['fixture']['status']['elapsed']
-        # Condition VIP : Match après 60 min avec une équipe qui domine
-        if elapsed > 60 and abs(m['goals']['home'] - m['goals']['away']) >= 1:
-            found_vip = True
-            st.markdown(f"""
-            <div class='vip-card'>
-                <h4 style='color:#d4af37; margin:0;'>🔥 OPPORTUNITÉ DÉTECTÉE</h4>
-                <p>{m['teams']['home']['name']} vs {m['teams']['away']['name']} ({elapsed}')<br>
-                <b>CONSEIL : MOMENTUM ÉLEVÉ</b></p>
-            </div><br>
-            """, unsafe_allow_html=True)
-            
-    if not found_vip:
-        st.write("L'Oracle analyse... Aucune opportunité VIP pour l'instant.")
-
-# --- SECTION ADMIN ---
-elif choice == "🔐 ADMIN":
-    st.markdown("<h1 class='gold-glow'>PANEL ADMIN</h1>", unsafe_allow_html=True)
-    pw = st.text_input("Mot de passe", type="password")
-    if pw == ADMIN_PASSWORD:
-        st.success("Bienvenue, Administrateur.")
-        # Dashboard des stats
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Utilisateurs", "370", "Canada, Burundi, FR")
-        col2.metric("Taux de réussite", "78%", "+2%")
-        col3.metric("Status API", "OK")
+        start_dt = datetime.strptime(start_date_str, "%Y-%m-%d %H:%M")
+        real_start = start_dt + timedelta(hours=5)
+        expiry_dt = real_start + timedelta(days=days)
         
-        st.markdown("### 📊 Rapports Géographiques (Simulation)")
-        st.table(pd.DataFrame({"Pays": ["Canada", "France", "Burundi"], "Visites": [20, 150, 1]}))
-    elif pw:
-        st.error("Accès refusé.")
+        now = datetime.now()
+        if now > expiry_dt:
+            return False, "00j 00h"
+        diff = expiry_dt - now
+        return True, f"{diff.days}j {diff.seconds//3600}h"
+    except:
+        return False, "Erreur Date"
+
+# ==========================================
+# 4. NAVIGATION
+# ==========================================
+st.sidebar.markdown("<h1 class='gold-glow'>L'ORACLE AI</h1>", unsafe_allow_html=True)
+menu = ["🏠 Accueil", "📊 Pronostics VIP", "📩 Contact", "🔐 Admin"]
+choice = st.sidebar.selectbox("Menu", menu)
+
+# --- ACCUEIL ---
+if choice == "🏠 Accueil":
+    st.image("https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=500")
+    st.markdown("<h2 class='gold-glow'>L'Analyseur de Momentum</h2>", unsafe_allow_html=True)
+    st.write(f"Bienvenue. Utilisez votre code promo **{PROMO_CODE_ACTIF}** pour activer vos avantages.")
+
+# --- PRONOSTICS VIP (CORRECTION JFK20) ---
+elif choice == "📊 Pronostics VIP":
+    # Utilisation de .upper() pour que "jfk20" ou "JFK20" fonctionnent tous les deux
+    user_code = st.sidebar.text_input("Entrez votre code d'accès ou Promo", type="password").upper()
+    
+    if user_code == PROMO_CODE_ACTIF.upper():
+        # Simulation d'un accès activé maintenant pour le test du code promo
+        date_activation_promo = datetime.now().strftime("%Y-%m-%d %H:%M")
+        is_active, time_left = check_expiry(date_activation_promo, "SILVER")
+        
+        st.success(f"✅ Code PROMO {PROMO_CODE_ACTIF} activé !")
+        st.info(f"Temps restant avant expiration : {time_left}")
+        st.markdown("### 🏆 Pronostics Premium débloqués")
+        # Ici tes fonctions de prédictions
+        
+    elif user_code != "":
+        st.error("❌ Code invalide ou expiré.")
+
+# --- ADMIN ---
+elif choice == "🔐 Admin":
+    passw = st.text_input("Password", type="password")
+    if passw == ADMIN_PASSWORD:
+        st.success("Accès Maître autorisé.")
+        # Dashboard stats Canada/Burundi
