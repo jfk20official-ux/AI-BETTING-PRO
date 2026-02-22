@@ -8,8 +8,8 @@ import streamlit.components.v1 as components
 # ==========================================
 # 1. CONFIGURATION (À REMPLIR)
 # ==========================================
-API_KEY = "TA_CLE_ICI" 
-ADMIN_PASSWORD = "TON_MOT_DE_PASSE"
+API_KEY = "80da65258a3809f6c7ad2c74930ceb90" 
+ADMIN_PASSWORD = "Tunga25721204301"
 GA_ID = "G-XXXXXXXXXX" # Ton ID Google Analytics (facultatif au début)
 
 # ==========================================
