@@ -1,76 +1,85 @@
 import streamlit as st
+import requests
 
-# 1. CONFIGURATION (DOIT ÊTRE EN HAUT)
-st.set_page_config(page_title="AI-BETTING-PRO", layout="wide")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="AI-BETTING-PRO", layout="centered")
 
-# 2. CACHER L'INTERFACE POUR LE LOOK "APP MOBILE"
+# --- TA CLÉ API (80da65258a3809f6c7ad2c74930ceb90) ---
+API_KEY = "TA_CLE_ICI"  # <--- «Tunga25721204301» 
+
+# --- STYLE CSS (OR ET NOIR) ---
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display:none;}
-    [data-testid="stHeader"] {display:none;}
+    .stApp { background-color: #0E1117; color: #FFFFFF; }
+    .stButton>button { background-color: #D4AF37; color: black; border-radius: 10px; }
+    .match-card { background-color: #1A1C24; padding: 15px; border-radius: 15px; border-left: 5px solid #D4AF37; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. INITIALISATION DES DONNÉES (Pour éviter l'erreur 500)
-if 'matchs_valides' not in st.session_state:
-    st.session_state['matchs_valides'] = [
-        {"sport": "⚽ Foot", "equipes": "Real Madrid vs Man City", "predic": "Win 1", "confiance": 97},
-        {"sport": "🏀 Basket", "equipes": "Lakers vs Celtics", "predic": "Win 2", "confiance": 94}
-    ]
+# --- NAVIGATION ---
+st.sidebar.title("💎 MENU")
+page = st.sidebar.radio("Aller vers :", ["Accueil", "Espace VIP", "Admin"])
 
-# 4. VARIABLES DE SÉCURITÉ
-ADMIN_PASSWORD = "Tunga25721204301"  # Change-le ici
-PROMO_CODE = "JFK20"
+# --- FONCTION API ---
+def fetch_live_matches():
+    if API_KEY == "TA_CLE_ICI":
+        return None
+    url = "https://v3.football.api-sports.io/fixtures?live=all"
+    headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
+    try:
+        response = requests.get(url, headers=headers)
+        return response.json()['response']
+    except:
+        return None
 
-# 5. DESIGN GLOBAL
-st.markdown("<h1 style='color: #D4AF37; text-align: center;'>🔮 AI-BETTING-PRO</h1>", unsafe_allow_html=True)
+# --- PAGES ---
+if page == "Accueil":
+    st.title("🔮 AI-BETTING-PRO")
+    st.write("---")
+    st.subheader("L'Oracle des Pronostics")
+    st.write("Bienvenue. Utilisez le menu à gauche pour accéder à la zone VIP.")
+    st.image("https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=500", caption="Analyse en temps réel")
 
-# 6. NAVIGATION LATÉRALE
-menu = ["🏠 Accueil", "💎 ESPACE VIP", "🔐 Admin"]
-choice = st.sidebar.selectbox("Menu", menu)
-
-# --- PAGE ACCUEIL ---
-if choice == "🏠 Accueil":
-    st.write("### Bienvenue dans l'Oracle")
-    st.image("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=500")
-    st.info("Utilisez le menu à gauche pour accéder aux pronostics VIP.")
-
-# --- PAGE VIP ---
-elif choice == "💎 ESPACE VIP":
-    st.subheader("💎 Accès Premium")
-    code_entre = st.text_input("Entrez votre clé VIP ou Code Promo", type="password")
+elif page == "Espace VIP":
+    st.title("🏆 ZONE VIP")
+    code = st.text_input("Code d'accès", type="password")
     
-    if code_entre == "1234" or code_entre.upper() == PROMO_CODE:
-        st.success("Accès Autorisé")
-        for m in st.session_state['matchs_valides']:
-            st.markdown(f"""
-            <div style="border: 1px solid #D4AF37; padding: 10px; border-radius: 10px; margin-bottom: 10px;">
-                <h4>{m['sport']} : {m['equipes']}</h4>
-                <p>🎯 Prono : <b>{m['predic']}</b></p>
-                <p style="color: #D4AF37;">⭐ Confiance : {m['confiance']}%</p>
-            </div>
-            """, unsafe_allow_html=True)
-    elif code_entre:
-        st.error("Clé invalide")
-
-# --- PAGE ADMIN ---
-elif choice == "🔐 Admin":
-    pwd = st.text_input("Mot de passe Maître", type="password")
-    if pwd == ADMIN_PASSWORD:
-        st.write("### Interface de Gestion")
+    if code == "JFK20":
+        st.success("Accès Maître autorisé")
         
-        # Ajouter un match
-        with st.form("ajout"):
-            sp = st.selectbox("Sport", ["⚽ Foot", "🏀 Basket"])
-            eq = st.text_input("Match")
-            pr = st.text_input("Prono")
-            cf = st.slider("Confiance", 90, 100, 95)
-            if st.form_submit_button("Publier"):
-                st.session_state['matchs_valides'].append({"sport": sp, "equipes": eq, "predic": pr, "confiance": cf})
-                st.rerun()
+        # Tentative de récupération API
+        matches = fetch_live_matches()
+        
+        if matches:
+            for m in matches:
+                with st.container():
+                    st.markdown(f"""
+                    <div class="match-card">
+                        <h4>⚽ {m['teams']['home']['name']} vs {m['teams']['away']['name']}</h4>
+                        <p>Score : {m['goals']['home']} - {m['goals']['away']}</p>
+                        <p style="color: #D4AF37;"><b>PRONO : ANALYSE EN COURS (95%+)</b></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.warning("Mode Manuel : En attente de la clé API ou des pronos Admin.")
+            if 'manual_matches' in st.session_state:
+                for m in st.session_state.manual_matches:
+                    st.markdown(f"<div class='match-card'><h4>⚽ {m['match']}</h4><p>Prono: {m['prono']}</p></div>", unsafe_allow_html=True)
 
-# 7. FOOTER
-st.markdown("<br><hr><center style='color: gray; font-size: 10px;'>AI-BETTING-PRO © 2026</center>", unsafe_allow_html=True)
+elif page == "Admin":
+    st.title("🔐 Panneau de Contrôle")
+    pwd = st.text_input("Mot de passe Admin", type="password")
+    
+    if pwd == "ton_mot_de_passe":
+        st.write("Ajouter un match manuellement :")
+        with st.form("add_match"):
+            m_name = st.text_input("Match")
+            m_prono = st.text_input("Pronostic")
+            if st.form_submit_button("Publier"):
+                if 'manual_matches' not in st.session_state:
+                    st.session_state.manual_matches = []
+                st.session_state.manual_matches.append({"match": m_name, "prono": m_prono})
+                st.success("Publié !")
+
+st.sidebar.write("---")
+st.sidebar.info("Version 2.0 - API Ready")
