@@ -1,21 +1,22 @@
+
 import streamlit as st
 import requests
 import random
 import string
-from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (Stabilité maximale) ---
 st.set_page_config(page_title="AI-BETTING-PRO", layout="wide")
 
-# --- ACTUALISATION AUTO (15 secondes) ---
-st_autorefresh(interval=15 * 1000, key="livescore_update")
+# --- ACTUALISATION SILENCIEUSE (15 sec) ---
+# Rafraîchit les scores sans faire clignoter toute la page
+st_autorefresh(interval=15 * 1000, key="livescore_silent")
 
-# --- PARAMÈTRES ET CLÉS ---
+# --- PARAMÈTRES RÉSEAU & SÉCURITÉ ---
 API_KEY = "80da65258a3809f6c7ad2c74930ceb90"
 PWD_ADMIN = "Tunga25721204301"
 
-# --- INITIALISATION DE LA MÉMOIRE ---
+# --- MÉMOIRE INTERNE (Session) ---
 if 'pronos' not in st.session_state:
     st.session_state.pronos = {"gratuit": {}, "vip": {}, "promo": {}}
 if 'gen_code' not in st.session_state:
@@ -23,115 +24,117 @@ if 'gen_code' not in st.session_state:
 if 'auth_vip' not in st.session_state:
     st.session_state.auth_vip = False
 
-# --- STYLE TYPE "LIVESCORE" & "FOREBET" ---
+# --- STYLE CSS (Inspiration Forebet / Anti-Flicker) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #F4F6F8; color: #333; }
+    .stApp { background-color: #F8F9FA; }
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    
     .match-row { 
-        background: white; padding: 12px; border-bottom: 1px solid #eee; 
+        background: white; padding: 12px; border-radius: 8px;
         display: flex; align-items: center; justify-content: space-between;
-        margin-bottom: 2px;
+        margin-bottom: 5px; border: 1px solid #EEE;
+        color: #333 !important;
     }
-    .time-col { color: #E74C3C; font-weight: bold; width: 60px; font-size: 14px; text-align: center; }
-    .team-name { font-weight: 500; color: #111; width: 35%; }
-    .score-box { background: #333; color: #D4AF37; padding: 5px 12px; border-radius: 5px; font-weight: bold; font-size: 18px; }
-    .vip-banner { background: #D4AF37; color: white; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 20px; cursor: pointer; }
-    .prono-card { background: white; border-left: 5px solid #28a745; padding: 10px; margin-bottom: 10px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .time-col { color: #FF4B4B; font-weight: bold; width: 45px; font-size: 14px; }
+    .team-name { font-weight: 500; color: #111 !important; width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .score-box { background: #222; color: #D4AF37; padding: 4px 12px; border-radius: 4px; font-weight: bold; min-width: 60px; text-align: center; }
+    .vip-card { background: #D4AF37; color: white; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
+    .prono-item { background: #E8F5E9; border-left: 5px solid #2E7D32; padding: 10px; border-radius: 5px; margin-bottom: 10px; color: #111 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FONCTION API ---
-def fetch_live_data():
+# --- RÉCUPÉRATION DES SCORES (Mise en cache 10s pour fluidité) ---
+@st.cache_data(ttl=10)
+def get_live_scores():
     url = "https://v3.football.api-sports.io/fixtures?live=all"
     headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
     try:
         res = requests.get(url, headers=headers, timeout=5).json().get('response', [])
-        # Trier par temps écoulé
+        # Classer par temps (les plus avancés en haut)
         return sorted(res, key=lambda x: x['fixture']['status']['elapsed'] or 0, reverse=True)
     except: return []
 
-# --- NAVIGATION ---
+# --- BARRE LATÉRALE ---
 st.sidebar.title("💎 AI-BETTING-PRO")
-menu = st.sidebar.radio("Navigation", ["⚽ LiveScore & Gratuit", "🔐 Espace VIP / Promo", "🛠️ Administration"])
+menu = st.sidebar.radio("Navigation", ["⚽ DIRECT & GRATUIT", "🏆 ESPACE PRIVÉ", "⚙️ ADMIN"])
 
-# --- 1. PAGE ACCUEIL : LIVESCORE & GRATUIT ---
-if menu == "⚽ LiveScore & Gratuit":
-    st.title("🔴 LiveScore - En Direct")
+# --- 1. PAGE DIRECT (LIVESCORE + GRATUIT) ---
+if menu == "⚽ DIRECT & GRATUIT":
+    st.markdown("<h2 style='color:#111;'>📊 Scores & Pronos Gratuits</h2>", unsafe_allow_html=True)
     
-    # Section Pronostics Gratuits (En haut pour la visibilité)
+    # Affichage des pronos gratuits ajoutés par l'Admin
     if st.session_state.pronos['gratuit']:
-        st.subheader("💡 Pronos Gratuits de l'Oracle")
         for k, p in st.session_state.pronos['gratuit'].items():
-            st.markdown(f"<div class='prono-card'><b>{p['match']}</b> | Pronostic : <span style='color:green;'>{p['prono']}</span> | Cote: {p['cote']}</div>", unsafe_allow_html=True)
+            st.markdown(f"""<div class="prono-item">💡 <b>{p['match']}</b> | PRONO : {p['prono']} | Cote : {p['cote']}</div>""", unsafe_allow_html=True)
 
     st.write("---")
     
-    # Affichage des scores live (Style ligne par ligne)
-    lives = fetch_live_data()
-    if lives:
-        for m in lives:
-            time = m['fixture']['status']['elapsed']
-            home = m['teams']['home']['name']
-            away = m['teams']['away']['name']
-            sh = m['goals']['home']
-            sa = m['goals']['away']
+    # Affichage Livescore
+    data = get_live_scores()
+    if data:
+        for m in data:
             st.markdown(f"""
             <div class="match-row">
-                <div class="time-col">{time}'</div>
-                <div class="team-name" style="text-align:right;">{home}</div>
-                <div class="score-box">{sh} - {sa}</div>
-                <div class="team-name">{away}</div>
+                <div class="time-col">{m['fixture']['status']['elapsed']}'</div>
+                <div class="team-name" style="text-align:right;">{m['teams']['home']['name']}</div>
+                <div class="score-box">{m['goals']['home']} - {m['goals']['away']}</div>
+                <div class="team-name">{m['teams']['away']['name']}</div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Aucun match en direct pour le moment. Revenez lors des prochains coups d'envoi !")
+        st.info("Aucun match en direct pour le moment. Actualisation automatique active...")
 
-# --- 2. ESPACE VIP / PROMO ---
-elif menu == "🔐 Espace VIP / Promo":
-    st.title("💎 Zone Privée")
-    
+# --- 2. ESPACE PRIVÉ (VIP / PROMO) ---
+elif menu == "🏆 ESPACE PRIVÉ":
     if not st.session_state.auth_vip:
-        st.markdown(f"""<div class="vip-banner">CODE D'ACCÈS ACTUEL : {st.session_state.gen_code}</div>""", unsafe_allow_html=True)
-        st.info("Copiez le code ci-dessus et validez pour entrer.")
-        input_code = st.text_input("Saisissez le code :")
-        if input_code == st.session_state.gen_code:
+        st.markdown(f'<div class="vip-card"><h3>🔒 ACCÈS RÉSERVÉ</h3>Code d\'accès actuel : <b>{st.session_state.gen_code}</b></div>', unsafe_allow_html=True)
+        code_in = st.text_input("Entrez le code pour voir les pronostics VIP :", type="default")
+        if code_in.strip() == st.session_state.gen_code:
             st.session_state.auth_vip = True
             st.rerun()
     else:
-        tab1, tab2 = st.tabs(["🏆 PRONOSTICS VIP", "🎁 BONUS CODE Jfk20"])
-        with tab1:
-            if not st.session_state.pronos['vip']: st.write("Analyse en cours par l'Oracle...")
-            for k, v in st.session_state.pronos['vip'].items():
-                st.markdown(f"<div class='prono-card' style='border-left-color: gold;'><h3>{v['match']}</h3><b>PRONO : {v['prono']}</b><br>Cote : {v['cote']}</div>", unsafe_allow_html=True)
-        with tab2:
-            st.write("Section réservée aux affiliés **1xBet** avec le code promo **Jfk20**.")
-            for k, v in st.session_state.pronos['promo'].items():
-                st.markdown(f"<div class='prono-card' style='border-left-color: blue;'><h3>{v['match']}</h3><b>PRONO : {v['prono']}</b></div>", unsafe_allow_html=True)
-
-# --- 3. ADMINISTRATION ---
-elif menu == "🛠️ Administration":
-    pwd = st.text_input("Mot de passe Maître", type="password")
-    if pwd == PWD_ADMIN:
-        st.success("Accès Admin Accordé")
-        
-        # Bouton pour générer un nouveau code IA
-        if st.button("🔄 GÉNÉRER UN NOUVEAU CODE VIP"):
-            st.session_state.gen_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            st.success(f"Nouveau code généré : {st.session_state.gen_code}")
+        st.title("💎 Salon de l'Oracle")
+        if st.button("🚪 Se déconnecter de la zone VIP"):
+            st.session_state.auth_vip = False
             st.rerun()
             
-        with st.form("add_prono"):
-            cat = st.selectbox("Choisir la Catégorie", ["gratuit", "vip", "promo"])
-            m_nom = st.text_input("Nom du Match")
-            m_prono = st.text_input("Pronostic")
-            m_cote = st.text_input("Cote")
-            if st.form_submit_button("PUBLIER LE MATCH"):
-                st.session_state.pronos[cat][m_nom] = {"match": m_nom, "prono": m_prono, "cote": m_cote}
-                st.success(f"Match ajouté dans {cat}")
+        t1, t2 = st.tabs(["🔥 PRONOS VIP", "💰 SECTION 1XBET (Jfk20)"])
+        with t1:
+            if not st.session_state.pronos['vip']: st.write("Analyse en cours...")
+            for k, v in st.session_state.pronos['vip'].items():
+                st.markdown(f"<div class='prono-item' style='background:#FFF9C4; border-color:#FBC02D;'>⚽ <b>{v['match']}</b><br>PRONO : {v['prono']} | Cote : {v['cote']}</div>", unsafe_allow_html=True)
+        with t2:
+            st.info("Utilisez le code promo Jfk20 pour vos dépôts 1xBet")
+            for k, v in st.session_state.pronos['promo'].items():
+                st.write(f"✅ {v['match']} | {v['prono']}")
 
-        if st.button("🗑️ TOUT EFFACER"):
-            st.session_state.pronos = {"gratuit": {}, "vip": {}, "promo": {}}
-            st.rerun()
+# --- 3. ADMIN (PANNEAU DE GESTION) ---
+elif menu == "⚙️ ADMIN":
+    pwd = st.text_input("Mot de passe Maître", type="password")
+    if pwd == PWD_ADMIN:
+        st.success("Bienvenue Tunga. Gérez vos codes et matchs ici.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🆕 GÉNÉRER NOUVEAU CODE VIP"):
+                st.session_state.gen_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                st.rerun()
+        with col2:
+            if st.button("🗑️ EFFACER TOUS LES MATCHS"):
+                st.session_state.pronos = {"gratuit": {}, "vip": {}, "promo": {}}
+                st.rerun()
+        
+        st.write("---")
+        with st.form("add_match"):
+            c = st.selectbox("Catégorie", ["gratuit", "vip", "promo"])
+            m = st.text_input("Nom du Match (ex: Real vs Barça)")
+            p = st.text_input("Ton Pronostic")
+            co = st.text_input("Cote")
+            if st.form_submit_button("PUBLIER LE PRONOSTIC"):
+                st.session_state.pronos[c][m] = {"match": m, "prono": p, "cote": co}
+                st.success(f"Match ajouté avec succès dans {c} !")
 
 st.sidebar.write("---")
-st.sidebar.caption("AI-BETTING-PRO v6.0")
+st.sidebar.caption("AI-BETTING-PRO v7.0")
