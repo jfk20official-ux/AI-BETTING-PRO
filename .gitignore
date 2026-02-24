@@ -1,0 +1,29 @@
+# Python & caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnements virtuels (très important)
+.venv/
+venv/
+env/
+
+# Streamlit : protège tes secrets !
+.streamlit/secrets.toml
+
+# Clés et mots de passe
+*.env
+.env.local
+
+# Logs et fichiers temporaires
+*.log
+
+# Données téléchargées ou lourdes
+data/
+
+# Fichiers système & éditeurs
+.DS_Store          # Mac
+Thumbs.db          # Windows
+.vscode/
+.idea/
