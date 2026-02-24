@@ -2,109 +2,143 @@ import streamlit as st
 import requests
 import random
 import string
+from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AI-BETTING-PRO", layout="centered")
-st_autorefresh(interval=15 * 1000, key="silent_refresh")
+st_autorefresh(interval=30 * 1000, key="v11_refresh")
 
 # --- PARAMÈTRES ---
 API_KEY = "80da65258a3809f6c7ad2c74930ceb90"
 PWD_ADMIN = "Tunga25721204301"
 
-if 'pronos' not in st.session_state: st.session_state.pronos = {"gratuit": {}, "vip": {}, "promo": {}}
-if 'gen_code' not in st.session_state: st.session_state.gen_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-if 'auth_vip' not in st.session_state: st.session_state.auth_vip = False
+if 'pronos' not in st.session_state: st.session_state.pronos = {}
+if 'view_mode' not in st.session_state: st.session_state.view_mode = "Client"
 
-# --- STYLE CSS (PRO & VERTICAL) ---
+# --- DESIGN SYSTEM (STYLE PRO) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #F2F2F2; }
+    .stApp { background-color: #F9FAFB; }
     .match-card { 
-        background: white; padding: 10px; border-radius: 8px; margin-bottom: 8px;
-        border-left: 5px solid #D4AF37; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px;
+        border: 1px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
     }
-    .team-row { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px; margin: 2px 0; }
-    .score-val { background: #333; color: #D4AF37; padding: 2px 8px; border-radius: 4px; min-width: 30px; text-align: center; }
-    .time-val { color: red; font-size: 12px; font-weight: bold; }
-    .odds-row { display: flex; gap: 10px; margin-top: 5px; border-top: 1px solid #eee; padding-top: 5px; font-size: 12px; }
-    .odd-box { background: #f8f8f8; padding: 2px 8px; border-radius: 3px; border: 1px solid #ddd; flex: 1; text-align: center; }
-    .vip-lock { text-align: center; padding: 20px; background: white; border-radius: 10px; border: 2px dashed #D4AF37; cursor: pointer; }
+    .team-name { font-weight: 600; font-size: 16px; color: #111827; }
+    .score-badge { 
+        background: #F3F4F6; color: #D4AF37; font-weight: 800; 
+        padding: 4px 10px; border-radius: 6px; font-size: 18px;
+    }
+    .date-footer { 
+        margin-top: 10px; padding-top: 8px; border-top: 1px solid #F3F4F6;
+        color: #6B7280; font-size: 12px; display: flex; justify-content: space-between;
+    }
+    .circle { 
+        display: inline-block; width: 28px; height: 28px; line-height: 24px; 
+        border-radius: 50%; text-align: center; font-weight: bold; font-size: 14px;
+        border: 2px solid;
+    }
+    .win { border-color: #10B981; color: #10B981; background: #ECFDF5; }
+    .loss { border-color: #EF4444; color: #EF4444; background: #FEF2F2; }
+    .pending { border-color: #D4AF37; color: #D4AF37; background: #FFFBEB; }
+    
+    /* Bouton Admin */
+    .admin-switch { background: #1F2937; color: white; padding: 10px; border-radius: 8px; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- API ---
-def get_live():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
+# --- LOGIQUE API ---
+@st.cache_data(ttl=60)
+def fetch_matches():
+    # Utilise la date actuelle du système
+    today = datetime.now().strftime("%Y-%m-%d")
+    url = f"https://v3.football.api-sports.io/fixtures?date={today}"
     headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
-    try: return requests.get(url, headers=headers, timeout=5).json().get('response', [])
+    try:
+        res = requests.get(url, headers=headers, timeout=5).json().get('response', [])
+        return res
     except: return []
 
-# --- NAVIGATION ---
-menu = st.sidebar.radio("MENU", ["⚽ LIVE", "💎 VIP 🔒", "🎁 Jfk20 🔒", "⚙️ ADMIN"])
+# --- BARRE LATÉRALE (LE DOUBLE FACE) ---
+st.sidebar.markdown("### 🛡️ CENTRE DE CONTRÔLE")
+is_admin_active = st.sidebar.toggle("Mode Maître (Admin)")
 
-# --- 1. PAGE LIVE (STYLE VERTICAL) ---
-if menu == "⚽ LIVE":
-    data = get_live()
-    if data:
-        for m in data:
-            st.markdown(f"""
-            <div class="match-card">
-                <div style="display:flex; justify-content:space-between;">
-                    <span style="font-size:10px; color:gray;">{m['league']['name']}</span>
-                    <span class="time-val">{m['fixture']['status']['elapsed']}'</span>
-                </div>
-                <div class="team-row"><span>{m['teams']['home']['name']}</span><span class="score-val">{m['goals']['home']}</span></div>
-                <div class="team-row"><span>{m['teams']['away']['name']}</span><span class="score-val">{m['goals']['away']}</span></div>
-                <div class="odds-row">
-                    <div class="odd-box">1: <b>--</b></div>
-                    <div class="odd-box">X: <b>--</b></div>
-                    <div class="odd-box">2: <b>--</b></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Pronos Gratuits
-    for k, p in st.session_state.pronos['gratuit'].items():
-        st.success(f"💡 {p['match']} | PRONO: {p['prono']} | @{p['cote']}")
-
-# --- 2. ESPACE VIP ---
-elif menu == "💎 VIP 🔒":
-    if not st.session_state.auth_vip:
-        st.markdown(f'<div class="vip-lock"><h3>💎 ACCÈS VIP 🔒</h3>Code actuel : <b>{st.session_state.gen_code}</b><br><small>Cliquez pour entrer le code</small></div>', unsafe_allow_html=True)
-        code_in = st.text_input("Code :")
-        if code_in == st.session_state.gen_code:
-            st.session_state.auth_vip = True
-            st.rerun()
+if is_admin_active:
+    access_code = st.sidebar.text_input("Code Secret", type="password")
+    if access_code == PWD_ADMIN:
+        st.session_state.view_mode = st.sidebar.segmented_control(
+            "CHOISIR LA FACE", ["Admin", "Client"], default="Admin"
+        )
     else:
-        st.title("🏆 VIP")
-        for k, v in st.session_state.pronos['vip'].items():
-            st.info(f"⚽ {v['match']} -> {v['prono']} (@{v['cote']})")
+        if access_code: st.sidebar.error("Code incorrect")
+        st.session_state.view_mode = "Client"
+else:
+    st.session_state.view_mode = "Client"
 
-# --- 3. SECTION PROMO ---
-elif menu == "🎁 Jfk20 🔒":
-    st.markdown('<div class="vip-lock"><h3>🎁 CODE PROMO Jfk20 🔒</h3>Vérification ID 1xBet requise.</div>', unsafe_allow_html=True)
-    for k, v in st.session_state.pronos['promo'].items():
-        st.warning(f"💎 {v['match']} | {v['prono']}")
+# --- 1. FACE ADMIN (BACK-OFFICE) ---
+if st.session_state.view_mode == "Admin":
+    st.markdown("<h2 style='color:#1F2937;'>🛠️ Gestion des Pronostics</h2>", unsafe_allow_html=True)
+    
+    with st.container(border=True):
+        st.write("Entrez l'ID du match pour lier votre analyse.")
+        m_id = st.text_input("ID du Match (ex: 1034221)")
+        m_pick = st.selectbox("Votre Prédiction", ["1", "X", "2"])
+        if st.button("🚀 PUBLIER MAINTENANT"):
+            if m_id:
+                st.session_state.pronos[m_id] = {"pick": m_pick}
+                st.success(f"Prono '{m_pick}' activé pour le match {m_id}")
+            else:
+                st.warning("Veuillez entrer un ID de match.")
 
-# --- 4. ADMIN ---
-elif menu == "⚙️ ADMIN":
-    pwd = st.text_input("Password", type="password")
-    if pwd == PWD_ADMIN:
-        st.success("ADMIN")
-        if st.button("👁️ VUE CLIENT"):
-            st.session_state.auth_vip = True
-            st.info("Mode Client activé. Allez sur l'onglet VIP.")
+# --- 2. FACE CLIENT (VITRINE) ---
+else:
+    st.markdown("<h1 style='text-align:center; color:#111;'>AI-BETTING-PRO</h1>", unsafe_allow_html=True)
+    
+    data = fetch_matches()
+    if not data:
+        st.info("Récupération des matchs du jour en cours...")
+    
+    for m in data[:35]: # Optimisation quota
+        mid = str(m['fixture']['id'])
+        status = m['fixture']['status']['short']
+        h_name, a_name = m['teams']['home']['name'], m['teams']['away']['name']
+        h_score = m['goals']['home'] if m['goals']['home'] is not None else "-"
+        a_score = m['goals']['away'] if m['goals']['away'] is not None else "-"
         
-        if st.button("🆕 NOUVEAU CODE"):
-            st.session_state.gen_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            st.rerun()
-            
-        with st.form("add"):
-            c = st.selectbox("Zone", ["gratuit", "vip", "promo"])
-            m = st.text_input("Match")
-            p = st.text_input("Prono")
-            co = st.text_input("Cote")
-            if st.form_submit_button("PUBLIER"):
-                st.session_state.pronos[c][m] = {"match": m, "prono": p, "cote": co}
-                st.success("OK")
+        # Formatage Date Complète (Jour Mois Année)
+        raw_dt = datetime.fromisoformat(m['fixture']['date'].replace('Z', '+00:00'))
+        date_full = raw_dt.strftime("%d %B %Y") # ex: 24 Février 2026
+        heure_exacte = raw_dt.strftime("%H:%M")
+
+        # Gestion du Prono & Cercle de validation
+        prono_display = ""
+        if mid in st.session_state.pronos:
+            p_val = st.session_state.pronos[mid]['pick']
+            c_class = "pending"
+            if status == "FT":
+                res = "1" if m['goals']['home'] > m['goals']['away'] else ("2" if m['goals']['away'] > m['goals']['home'] else "X")
+                c_class = "win" if p_val == res else "loss"
+            prono_display = f"<div class='circle {c_class}'>{p_val}</div>"
+
+        # HTML de la Carte
+        st.markdown(f"""
+        <div class="match-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="flex-grow:1;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span class="team-name">{h_name}</span>
+                        <span class="score-badge">{h_score}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="team-name">{a_name}</span>
+                        <span class="score-badge">{a_score}</span>
+                    </div>
+                </div>
+                <div style="margin-left:20px;">{prono_display}</div>
+            </div>
+            <div class="date-footer">
+                <span>📅 {date_full}</span>
+                <span>⏰ <b>{heure_exacte}</b> | {status}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
