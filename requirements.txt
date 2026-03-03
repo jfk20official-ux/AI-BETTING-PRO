@@ -1,1 +1,7 @@
-streamlit-autorefresh>=0.0.1
+streamlit
+requests
+pytz
+streamlit-autorefresh
+numpy
+scipy
+
