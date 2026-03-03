@@ -7,9 +7,7 @@ import numpy as np
 from scipy.stats import poisson
 import os
 
-# ────────────────────────────────────────────────
-# SECRETS avec os.getenv (solution fiable pour Hugging Face / PythonAnywhere)
-# ────────────────────────────────────────────────
+# SECRETS : on utilise os.getenv (Hugging Face variables) + fallback
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
 API_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
 
@@ -48,9 +46,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ────────────────────────────────────────────────
 # SIDEBAR MODE ADMIN
-# ────────────────────────────────────────────────
 with st.sidebar:
     st.header("AI-BET")
     toggle = st.toggle("Mode Admin")
@@ -67,11 +63,9 @@ with st.sidebar:
 
     show_tomorrow = st.checkbox("Demain", value=False)
 
-# ────────────────────────────────────────────────
 # PRÉDICTION POISSON INTÉGRÉE
-# ────────────────────────────────────────────────
 def get_poisson_proba(home, away):
-    lambda_home = 1.8  # fictif – remplace par calcul réel si besoin
+    lambda_home = 1.8
     lambda_away = 1.3
 
     MAX_GOALS = 6
@@ -90,9 +84,7 @@ def get_poisson_proba(home, away):
         "Over2.5": round(over25, 1)
     }
 
-# ────────────────────────────────────────────────
-# FETCH MATCHS (API-Football)
-# ────────────────────────────────────────────────
+# FETCH MATCHS
 @st.cache_data(ttl=60)
 def fetch_fixtures(date_str):
     if not API_KEY:
@@ -105,9 +97,7 @@ def fetch_fixtures(date_str):
     except:
         return []
 
-# ────────────────────────────────────────────────
-# AFFICHAGE PRINCIPAL
-# ────────────────────────────────────────────────
+# AFFICHAGE
 if st.session_state.mode == "Admin":
     st.subheader("Panel Admin - Prono")
     mid = st.text_input("ID Match")
@@ -131,4 +121,66 @@ else:
     else:
         for group, title in [
             ([m for m in fixtures if m['fixture']['status']['short'] in ['1H','HT','2H']], "En direct"),
-            ([m for m in fixtures if m['fixture']['status']['short'] == 'NS'], "À venir
+            ([m for m in fixtures if m['fixture']['status']['short'] == 'NS'], "À venir"),
+            ([m for m in fixtures if m['fixture']['status']['short'] == 'FT'], "Terminés")
+        ]:
+            if group:
+                st.subheader(title)
+                for m in sorted(group, key=lambda x: x['fixture']['date']):
+                    fid = str(m['fixture']['id'])
+                    h = m['teams']['home']['name']
+                    a = m['teams']['away']['name']
+                    sh = m['goals']['home'] if m['goals']['home'] is not None else "-"
+                    sa = m['goals']['away'] if m['goals']['away'] is not None else "-"
+                    stt = m['fixture']['status']['short']
+                    el = m['fixture']['status']['elapsed'] or ""
+
+                    dt = datetime.fromisoformat(m['fixture']['date'].replace("Z", "+00:00")).astimezone(tz)
+                    heure = dt.strftime("%H:%M")
+                    jour = dt.strftime("%d/%m")
+
+                    bord = "wait-border"
+                    prono_html = ""
+                    if fid in st.session_state.get('pronos', {}):
+                        pr = st.session_state.pronos[fid]['p']
+                        prono_html = f"<div class='proba-box'>{pr}</div>"
+                        if stt == "FT":
+                            res = "1" if sh > sa else ("2" if sa > sh else "X")
+                            bord = "win-border" if pr == res else "loss-border"
+
+                    proba_html = ""
+                    if stt == "NS" and not prono_html:
+                        proba = get_poisson_proba(h, a)
+                        p1 = proba["1"]
+                        px = proba["X"]
+                        p2 = proba["2"]
+                        o25 = proba["Over2.5"]
+                        proba_html = f"""
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div class='proba-box proba-1'>{p1}%</div>
+                            <div class='proba-box proba-x'>{px}%</div>
+                            <div class='proba-box proba-2'>{p2}%</div>
+                            <div class='proba-box'>O2.5 {o25}%</div>
+                        </div>
+                        """
+
+                    stat_disp = f"{el}'" if el else stt
+                    stat_cls = "status-live" if stt in ['1H','HT','2H'] else "status-fin"
+
+                    st.markdown(f"""
+                    <div class="match-card {bord}">
+                        <div class="time-col">
+                            <div class="time">{heure}</div>
+                            <div style="font-size:0.8rem; color:#666;">{jour}</div>
+                        </div>
+                        <div style="min-width:40px; text-align:center; font-weight:bold;" class="{stat_cls}">
+                            {stat_disp}
+                        </div>
+                        <div class="teams">
+                            <div class="team-row"><span class="team-name">{h}</span><span class="score">{sh}</span></div>
+                            <div class="team-row"><span class="team-name">{a}</span><span class="score">{sa}</span></div>
+                            {proba_html}
+                        </div>
+                        {prono_html}
+                    </div>
+                    """, unsafe_allow_html=True)
