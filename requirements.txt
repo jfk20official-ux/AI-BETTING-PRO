@@ -1,12 +1,1 @@
-# Core Streamlit + ton app livescore actuelle
-streamlit>=1.41.0
-requests>=2.32.3
-pandas>=2.2.3
-pytz>=2024.1
 streamlit-autorefresh>=0.0.1
-
-# Backend FastAPI + calcul Poisson (pour forebet.py)
-fastapi>=0.115.0
-uvicorn>=0.30.6
-numpy>=2.0.0
-scipy>=1.14.0
