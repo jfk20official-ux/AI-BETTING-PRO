@@ -7,7 +7,7 @@ import numpy as np
 from scipy.stats import poisson
 import os
 
-# ====================== SECRETS (corrigé pour Hugging Face) ======================
+# ====================== CONFIGURATION SECRETS ======================
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
 API_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
 
@@ -46,7 +46,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar Mode Admin
+# Sidebar
 with st.sidebar:
     st.header("AI-BET")
     toggle = st.toggle("Mode Admin")
@@ -63,7 +63,7 @@ with st.sidebar:
 
     show_tomorrow = st.checkbox("Demain", value=False)
 
-# Prédiction Poisson intégrée
+# Poisson intégré
 def get_poisson_proba(home, away):
     lambda_home = 1.8
     lambda_away = 1.3
@@ -84,7 +84,7 @@ def get_poisson_proba(home, away):
         "Over2.5": round(over25, 1)
     }
 
-# Récupération des matchs
+# Fetch matchs
 @st.cache_data(ttl=60)
 def fetch_fixtures(date_str):
     if not API_KEY:
@@ -97,7 +97,7 @@ def fetch_fixtures(date_str):
     except:
         return []
 
-# ====================== AFFICHAGE ======================
+# Affichage
 if st.session_state.mode == "Admin":
     st.subheader("Panel Admin - Prono")
     mid = st.text_input("ID Match")
