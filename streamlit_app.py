@@ -7,13 +7,12 @@ import numpy as np
 from scipy.stats import poisson
 import os
 
-# ====================== SECRETS ======================
+# ====================== CONFIGURATION ======================
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
 API_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
 
 tz = pytz.timezone("Africa/Bujumbura")
 
-# Refresh auto
 if 'mode' not in st.session_state:
     st.session_state.mode = "Client"
 if st.session_state.mode == "Client":
@@ -84,27 +83,57 @@ def get_poisson_proba(home, away):
         "Over2.5": round(over25, 1)
     }
 
-# Fetch matchs (version corrigée)
+# ====================== FETCH MATCHS - 3 SOURCES GRATUITES ======================
 @st.cache_data(ttl=60, show_spinner="Chargement des matchs...")
 def fetch_fixtures(date_str):
-    if not API_KEY:
-        st.error("Clé API manquante")
-        return []
-    url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-    headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
+    # 1. TheSportsDB (priorité 1 - très large couverture)
     try:
-        r = requests.get(url, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("errors"):
-            st.error(f"Erreur API : {data['errors']}")
-            return []
-        return data.get("response", [])
-    except Exception as e:
-        st.error(f"Erreur connexion API : {str(e)}")
-        return []
+        url = f"https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date_str}"
+        r = requests.get(url, timeout=10).json()
+        events = r.get("events", [])
+        fixtures = []
+        for e in events:
+            fixtures.append({
+                "fixture": {
+                    "id": e.get("idEvent"),
+                    "date": e.get("dateEvent") + "T" + e.get("strTime", "00:00:00"),
+                    "status": {"short": "NS" if e.get("strStatus") == "Not Started" else "FT"}
+                },
+                "teams": {
+                    "home": {"name": e.get("strHomeTeam")},
+                    "away": {"name": e.get("strAwayTeam")}
+                },
+                "goals": {"home": e.get("intHomeScore"), "away": e.get("intAwayScore")}
+            })
+        if fixtures:
+            return fixtures
+    except:
+        pass
 
-# Affichage
+    # 2. Football-Data.org (priorité 2)
+    try:
+        url = f"https://api.football-data.org/v4/matches?date={date_str}"
+        headers = {"X-Auth-Token": "votre_clé_football_data"}  # gratuit après inscription
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code == 200:
+            return r.json().get("matches", [])
+    except:
+        pass
+
+    # 3. API-Football (priorité 3 - ta clé actuelle)
+    try:
+        url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
+        headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
+        r = requests.get(url, headers=headers, timeout=8).json()
+        if not r.get("errors"):
+            return r.get("response", [])
+    except:
+        pass
+
+    st.warning("Aucune source de données disponible aujourd'hui.")
+    return []
+
+# ====================== AFFICHAGE ======================
 if st.session_state.mode == "Admin":
     st.subheader("Panel Admin - Prono")
     mid = st.text_input("ID Match")
@@ -127,22 +156,22 @@ else:
         st.info(f"Aucun match trouvé pour le {date_str}")
     else:
         for group, title in [
-            ([m for m in fixtures if m['fixture']['status']['short'] in ['1H','HT','2H']], "En direct"),
-            ([m for m in fixtures if m['fixture']['status']['short'] == 'NS'], "À venir"),
-            ([m for m in fixtures if m['fixture']['status']['short'] == 'FT'], "Terminés")
+            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') in ['1H','HT','2H']], "En direct"),
+            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') == 'NS'], "À venir"),
+            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') == 'FT'], "Terminés")
         ]:
             if group:
                 st.subheader(title)
-                for m in sorted(group, key=lambda x: x['fixture']['date']):
-                    fid = str(m['fixture']['id'])
-                    h = m['teams']['home']['name']
-                    a = m['teams']['away']['name']
-                    sh = m['goals']['home'] if m['goals']['home'] is not None else "-"
-                    sa = m['goals']['away'] if m['goals']['away'] is not None else "-"
-                    stt = m['fixture']['status']['short']
-                    el = m['fixture']['status']['elapsed'] or ""
+                for m in sorted(group, key=lambda x: x.get('fixture', {}).get('date', '')):
+                    fid = str(m.get('fixture', {}).get('id', ''))
+                    h = m.get('teams', {}).get('home', {}).get('name', 'Unknown')
+                    a = m.get('teams', {}).get('away', {}).get('name', 'Unknown')
+                    sh = m.get('goals', {}).get('home', '-')
+                    sa = m.get('goals', {}).get('away', '-')
+                    stt = m.get('fixture', {}).get('status', {}).get('short', 'NS')
+                    el = m.get('fixture', {}).get('status', {}).get('elapsed', '')
 
-                    dt = datetime.fromisoformat(m['fixture']['date'].replace("Z", "+00:00")).astimezone(tz)
+                    dt = datetime.fromisoformat(str(m.get('fixture', {}).get('date', '2026-01-01T00:00:00')).replace("Z", "+00:00")).astimezone(tz)
                     heure = dt.strftime("%H:%M")
                     jour = dt.strftime("%d/%m")
 
