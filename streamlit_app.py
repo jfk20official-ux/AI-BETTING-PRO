@@ -1,63 +1,123 @@
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+import numpy as np
+from scipy.stats import poisson
 
-# --- CONFIGURATION DES SECRETS ---
-# Assure-toi que API_FOOTBALL_KEY est bien dans Settings > Secrets sur Streamlit Cloud
-API_KEY = st.secrets["API_FOOTBALL_KEY"]
+# --- 1. CONFIGURATION DE LA PAGE (TOUJOURS EN PREMIER) ---
+st.set_page_config(page_title="AI ScoreCast Pro", layout="wide", initial_sidebar_state="collapsed")
+
+# --- 2. RÉCUPÉRATION DES SECRETS ---
+try:
+    API_KEY = st.secrets["API_FOOTBALL_KEY"]
+    ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+except:
+    # Valeurs de secours si les secrets ne sont pas configurés
+    API_KEY = "80da65258a3809f6c7ad2c74930ceb90"
+    ADMIN_PASSWORD = "Tunga25721204301"
+
 BASE_URL = "https://v3.football.api-sports.io/fixtures"
 
-def fetch_data(params):
-    headers = {
-        'x-rapidapi-key': API_KEY,
-        'x-rapidapi-host': 'v3.football.api-sports.io'
-    }
+# --- 3. SYSTÈME DE LANGUES ---
+languages = {
+    "Français": {"live": "EN DIRECT", "prono": "PRONOSTICS", "hist": "HISTORIQUE", "install": "INSTALLER L'APP", "btts": "Les deux marquent", "over": "Plus de 2.5", "finished": "FT"},
+    "English": {"live": "LIVE", "prono": "PREDICTIONS", "hist": "HISTORY", "install": "INSTALL APP", "btts": "BTTS", "over": "Over 2.5", "finished": "FT"},
+    "Kiswahili": {"live": "MUBASHARA", "prono": "UTABIRI", "hist": "HISTORIA", "install": "WEKA APP", "btts": "Zote kufunga", "over": "Zaidi ya 2.5", "finished": "FT"}
+}
+
+with st.sidebar:
+    st.title("Settings")
+    sel_lang = st.selectbox("🌐 Language / Lugha", list(languages.keys()))
+    L = languages[sel_lang]
+
+# --- 4. STYLE CSS ---
+st.markdown(f"""
+    <style>
+    .main {{ background-color: #0e1117; }}
+    .promo-banner {{ background: linear-gradient(90deg, #1d976c 0%, #93f9b9 100%); color: #000 !important; padding: 12px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 15px; text-decoration: none; display: block; }}
+    .match-card {{ background-color: #1a1c23; border: 1px solid #2d2f39; padding: 12px; border-radius: 12px; margin-bottom: 10px; }}
+    .team-row {{ display: flex; justify-content: space-between; align-items: center; margin: 5px 0; }}
+    .team-info {{ display: flex; align-items: center; gap: 10px; color: white; }}
+    .team-logo {{ width: 22px; height: 22px; }}
+    .score-live {{ color: #00ff88; font-weight: bold; font-size: 1.2em; }}
+    .live-badge {{ color: white; background-color: #ff4b4b; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; }}
+    .market-badge {{ background-color: #262932; color: #00ff88; padding: 4px 8px; border-radius: 6px; font-size: 0.75em; font-weight: bold; border: 1px solid #3e414b; margin-top: 8px; display: inline-block; }}
+    header, footer, #MainMenu {{visibility: hidden;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 5. LOGIQUE API & PRÉDICTIONS ---
+def fetch(params):
+    headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
     try:
         response = requests.get(BASE_URL, headers=headers, params=params, timeout=10)
-        if response.status_code == 200:
-            return response.json().get('response', [])
-        else:
-            st.error(f"Erreur API {response.status_code}: Vérifiez votre clé.")
-            return []
-    except Exception as e:
-        st.error(f"Erreur de connexion : {e}")
+        return response.json().get('response', [])
+    except:
         return []
 
-# --- INTERFACE ---
-st.title("⚽ AI ScoreCast Pro")
+def get_ai_prediction(h_avg=1.6, a_avg=1.2):
+    h_p = [poisson.pmf(i, h_avg) for i in range(6)]
+    a_p = [poisson.pmf(i, a_avg) for i in range(6)]
+    m = np.outer(h_p, a_p)
+    w, d, l = np.sum(np.tril(m, -1)), np.sum(np.diag(m)), np.sum(np.triu(m, 1))
+    ov25 = 1 - (m[0,0]+m[0,1]+m[0,2]+m[1,0]+m[1,1]+m[2,0])
+    btts = (1-h_p[0]) * (1-a_p[0])
+    return f"{w*100:.0f}%", f"{d*100:.0f}%", f"{l*100:.0f}%", f"{ov25*100:.0f}%", f"{btts*100:.0f}%"
 
-tab_live, tab_pronos, tab_hist = st.tabs(["🔴 LIVE", "📈 PRONOS", "📚 HISTORIQUE"])
+# --- 6. BANNIÈRE PROMO ---
+st.markdown(f'<a href="https://1xbet.com" class="promo-banner">💰 BONUS +200% CODE: TUNGA20</a>', unsafe_allow_html=True)
+
+# --- 7. ONGLETS PRINCIPAUX ---
+tab_live, tab_prono, tab_hist = st.tabs([f"🎮 {L['live']}", f"📈 {L['prono']}", f"📚 {L['hist']}"])
 
 with tab_live:
-    # On force la récupération de TOUS les matchs en direct
-    lives = fetch_data({'live': 'all'})
-    
-    if lives:
-        for match in lives:
-            home = match['teams']['home']['name']
-            away = match['teams']['away']['name']
-            status = match['fixture']['status']['elapsed']
-            score_home = match['goals']['home']
-            score_away = match['goals']['away']
-            
+    lives = fetch({'live': 'all'})
+    if not lives:
+        st.info("Aucun match en direct pour le moment.")
+    else:
+        for m in lives:
             st.markdown(f"""
-            <div style="border:1px solid #444; padding:10px; border-radius:10px; margin-bottom:10px;">
-                <small style="color:red;">● {status}' LIVE</small><br>
-                <b>{home}</b> {score_home} - {score_away} <b>{away}</b>
+            <div class="match-card">
+                <div style="font-size:0.7em; color:#888; margin-bottom:5px;">{m['league']['name']} • <span class="live-badge">● {m['fixture']['status']['elapsed']}'</span></div>
+                <div class="team-row">
+                    <div class="team-info"><img src="{m['teams']['home']['logo']}" class="team-logo"><span>{m['teams']['home']['name']}</span></div>
+                    <div class="score-live">{m['goals']['home']}</div>
+                </div>
+                <div class="team-row">
+                    <div class="team-info"><img src="{m['teams']['away']['logo']}" class="team-logo"><span>{m['teams']['away']['name']}</span></div>
+                    <div class="score-live">{m['goals']['away']}</div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-    else:
-        st.warning("Aucun match en direct actuellement selon l'API.")
-        # Petit bouton pour tester si la clé fonctionne
-        if st.button("Vérifier la connexion API"):
-            test = fetch_data({'next': '1'})
-            if test: st.success("La clé API fonctionne ! C'est juste qu'il n'y a pas de match Live.")
 
-with tab_pronos:
-    # Récupère les matchs des prochaines 24h
-    next_matches = fetch_data({'next': '10'})
-    if next_matches:
-        for m in next_matches:
-            st.write(f"🔮 {m['teams']['home']['name']} vs {m['teams']['away']['name']}")
+with tab_prono:
+    fixtures = fetch({'date': datetime.now().strftime('%Y-%m-%d')})
+    upcoming = [f for f in fixtures if f['fixture']['status']['short'] in ['NS', 'TBD']]
+    if not upcoming:
+        st.info("Plus de pronostics pour aujourd'hui.")
     else:
-        st.info("Aucun prono disponible.")
+        for f in upcoming:
+            w, d, l, ov, bt = get_ai_prediction()
+            st.markdown(f"""
+            <div class="match-card">
+                <div style="font-size:0.7em; color:#888; margin-bottom:8px;">{f['league']['name']} • {f['fixture']['date'][11:16]}</div>
+                <div class="team-row"><div class="team-info"><img src="{f['teams']['home']['logo']}" class="team-logo"><span>{f['teams']['home']['name']}</span></div></div>
+                <div class="team-row"><div class="team-info"><img src="{f['teams']['away']['logo']}" class="team-logo"><span>{f['teams']['away']['name']}</span></div></div>
+                <div class="market-badge">1X2: {w} | {d} | {l}</div>
+                <div class="market-badge">Over 2.5: {ov}</div>
+                <div class="market-badge">BTTS: {bt}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+with tab_hist:
+    yesterday = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
+    past = fetch({'date': yesterday})
+    for p in past[:15]:
+        st.markdown(f"""
+        <div class="match-card" style="opacity:0.8;">
+            <div class="team-row">
+                <div class="team-info"><span style="font-size:0.85em;">{p['teams']['home']['name']} {p['goals']['home']} - {p['goals']['away']} {p['teams']['away']['name']}</span></div>
+                <div style="color:#888; font-size:0.8em; font-weight:bold;">{L['finished']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
