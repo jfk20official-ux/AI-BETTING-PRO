@@ -5,12 +5,19 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 import numpy as np
 from scipy.stats import poisson
-import os
 
-# --- CONFIGURATION DES SECRETS (Hugging Face) ---
-# Note : Configurez ADMIN_PASSWORD et API_FOOTBALL_KEY dans Settings > Variables and secrets
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
-API_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
+# --- CONFIGURATION DES SECRETS (Streamlit Cloud) ---
+# Allez dans Settings > Secrets sur Streamlit Cloud et collez :
+# API_FOOTBALL_KEY = "votre_cle_ici"
+# ADMIN_PASSWORD = "votre_password_ici"
+
+try:
+    ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+    API_KEY = st.secrets["API_FOOTBALL_KEY"]
+except:
+    # Valeurs de secours si les secrets ne sont pas encore configurés
+    ADMIN_PASSWORD = "Tunga25721204301"
+    API_KEY = "80da65258a3809f6c7ad2c74930ceb90"
 
 tz = pytz.timezone("Africa/Bujumbura")
 
@@ -21,9 +28,9 @@ if 'mode' not in st.session_state:
 if st.session_state.mode == "Client":
     st_autorefresh(interval=90 * 1000, key="refresh")
 
-st.set_page_config(page_title="AI-BET • Livescore & Pronos", layout="wide")
+st.set_page_config(page_title="AiBettingTips • Livescore", layout="wide")
 
-# --- STYLE CSS ---
+# --- STYLE CSS (Conservé à 100%) ---
 st.markdown("""
 <style>
     .stApp { background: #f8f9fa; }
@@ -47,7 +54,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- FONCTION PRÉDICTION ---
+# --- FONCTION PRÉDICTION POISSON (Conservée) ---
 def get_poisson_proba(home, away):
     lambda_home, lambda_away = 1.8, 1.3
     MAX_GOALS = 6
@@ -56,26 +63,36 @@ def get_poisson_proba(home, away):
     p1 = np.sum(np.tril(matrix, -1)) * 100
     px = np.sum(np.diag(matrix)) * 100
     p2 = np.sum(np.triu(matrix, 1)) * 100
-    # Correction calcul Over 2.5 simplifié pour la stabilité
     over25 = (1 - (matrix[0,0] + matrix[0,1] + matrix[1,0] + matrix[1,1] + matrix[0,2] + matrix[2,0])) * 100
     return {"1": round(p1, 1), "X": round(px, 1), "2": round(p2, 1), "Over2.5": round(over25, 1)}
 
-# --- API FETCH ---
+# --- API FETCH (Version Stable) ---
 @st.cache_data(ttl=60)
 def fetch_fixtures(date_str):
-    if not API_KEY or API_KEY == "":
+    if not API_KEY:
+        st.error("Clé API manquante dans les Secrets")
         return []
+    
+    # URL pour API-SPORTS (RapidAPI)
     url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-    headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
+    headers = {
+        "x-rapidapi-key": API_KEY, 
+        "x-rapidapi-host": "v3.football.api-sports.io"
+    }
+    
     try:
         response = requests.get(url, headers=headers, timeout=10)
-        data = response.json()
-        return data.get("response", [])
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("response", [])
+        else:
+            st.error(f"Erreur API {response.status_code}")
+            return []
     except Exception as e:
-        st.error(f"Erreur API: {e}")
+        st.error(f"Erreur de connexion : {e}")
         return []
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Conservé) ---
 with st.sidebar:
     st.header("AI-BET")
     toggle = st.toggle("Mode Admin")
@@ -101,7 +118,7 @@ if st.session_state.mode == "Admin":
             st.session_state.pronos[mid] = {"p": p}
             st.success(f"Prono enregistré pour {mid}")
 else:
-    st.markdown("<h3 style='text-align:center; color:#1A73E8;'>AI-BET LIVESCORE & PRONOS</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center; color:#1A73E8;'>AiBettingTips LIVESCORE</h3>", unsafe_allow_html=True)
 
     target = datetime.now(tz).date()
     if show_tomorrow: target += timedelta(days=1)
@@ -110,7 +127,7 @@ else:
     fixtures = fetch_fixtures(date_str)
 
     if not fixtures:
-        st.info(f"Aucun match disponible pour le {date_str}")
+        st.info(f"Aucun match disponible pour le {date_str}. Vérifiez votre clé API ou les matchs du jour.")
     else:
         # Tri des matchs
         live = [m for m in fixtures if m['fixture']['status']['short'] in ['1H','HT','2H']]
@@ -128,20 +145,26 @@ else:
                     stt = m['fixture']['status']['short']
                     el = m['fixture']['status']['elapsed'] or ""
 
-                    dt = datetime.fromisoformat(m['fixture']['date'].replace("Z", "+00:00")).astimezone(tz)
-                    heure = dt.strftime("%H:%M")
+                    # Gestion de l'heure
+                    try:
+                        dt = datetime.fromisoformat(m['fixture']['date'].replace("Z", "+00:00")).astimezone(tz)
+                        heure = dt.strftime("%H:%M")
+                    except:
+                        heure = "--:--"
 
-                    # Logique de bordure (Gagné/Perdu)
+                    # Logique de bordure
                     bord = "wait-border"
                     prono_display = ""
                     if fid in st.session_state.get('pronos', {}):
                         pr = st.session_state.pronos[fid]['p']
                         prono_display = f"<div class='proba-box' style='border:1px solid #1A73E8'>Prono: {pr}</div>"
                         if stt == "FT":
-                            res = "1" if int(sh) > int(sa) else ("2" if int(sa) > int(sh) else "X")
-                            bord = "win-border" if pr == res else "loss-border"
+                            try:
+                                res = "1" if int(sh) > int(sa) else ("2" if int(sa) > int(sh) else "X")
+                                bord = "win-border" if pr == res else "loss-border"
+                            except: pass
 
-                    # Probabilités auto pour les matchs à venir
+                    # Probabilités auto
                     proba_html = ""
                     if stt == "NS" and not prono_display:
                         probs = get_poisson_proba(h, a)
