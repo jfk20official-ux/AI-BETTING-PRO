@@ -1,11 +1,10 @@
 import streamlit as st
 import requests
 from datetime import datetime, timedelta
-from streamlit_autorefresh import st_autorefresh
 import numpy as np
 from scipy.stats import poisson
 
-# --- CONFIGURATION PAGE (Style Mobile First) ---
+# --- CONFIGURATION PAGE ---
 st.set_page_config(page_title="AI ScoreCast Pro", layout="wide", initial_sidebar_state="collapsed")
 
 # --- RÉCUPÉRATION DES SECRETS ---
@@ -16,80 +15,38 @@ except:
     API_KEY = "80da65258a3809f6c7ad2c74930ceb90"
     ADMIN_PASSWORD = "Tunga25721204301"
 
-# --- STYLE CSS (Inspiré de PredictX / ScoreCast) ---
-st.markdown("""
+# --- SYSTÈME DE LANGUES ---
+languages = {
+    "Français": {"live": "EN DIRECT", "prono": "PRONOSTICS", "hist": "HISTORIQUE", "admin": "ADMIN", "install": "INSTALLER L'APP", "btts": "Les deux marquent", "over": "Plus de 2.5", "finished": "FT"},
+    "English": {"live": "LIVE", "prono": "PREDICTIONS", "hist": "HISTORY", "admin": "ADMIN", "install": "INSTALL APP", "btts": "Both Teams to Score", "over": "Over 2.5", "finished": "FT"},
+    "Español": {"live": "EN VIVO", "prono": "PRONÓSTICOS", "hist": "HISTORIAL", "admin": "ADMIN", "install": "INSTALAR APP", "btts": "Ambos marcan", "over": "Más de 2.5", "finished": "FT"},
+    "Português": {"live": "AO VIVO", "prono": "PALPITES", "hist": "HISTÓRICO", "admin": "ADMIN", "install": "INSTALAR APP", "btts": "Ambas marcam", "over": "Mais de 2.5", "finished": "FT"},
+    "Deutsch": {"live": "LIVE", "prono": "PROGNOSEN", "hist": "HISTORIE", "admin": "ADMIN", "install": "APP INSTALLIEREN", "btts": "Beide treffen", "over": "Über 2.5", "finished": "FT"},
+    "العربية": {"live": "مباشر", "prono": "توقعات", "hist": "الأرشيف", "admin": "مدير", "install": "تثبيت التطبيق", "btts": "كلا الفريقين يسجل", "over": "أكثر من 2.5", "finished": "FT"},
+    "中文": {"live": "直播", "prono": "预测", "hist": "历史", "admin": "管理员", "install": "安装应用", "btts": "两队均得分", "over": "超过 2.5", "finished": "FT"},
+    "Kiswahili": {"live": "MUBASHARA", "prono": "UTABIRI", "hist": "HISTORIA", "admin": "MSIMAMIZI", "install": "WEKA APP", "btts": "Zote kufunga", "over": "Zaidi ya 2.5", "finished": "FT"}
+}
+
+# Choix de la langue dans la sidebar
+with st.sidebar:
+    st.title("Settings")
+    sel_lang = st.selectbox("🌐 Language / Lugha", list(languages.keys()))
+    L = languages[sel_lang]
+
+# --- STYLE CSS ---
+st.markdown(f"""
     <style>
-    /* Couleurs de fond et texte */
-    .main { background-color: #0e1117; }
-    div[data-testid="stVerticalBlock"] { gap: 0rem; }
-    
-    /* Bannière Code Promo style ScoreCast */
-    .promo-banner {
-        background: linear-gradient(90deg, #1d976c 0%, #93f9b9 100%);
-        color: #000 !important;
-        padding: 12px;
-        border-radius: 10px;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 15px;
-        text-decoration: none;
-        display: block;
-        font-size: 0.9em;
-    }
-
-    /* Cartes de Match Style Sombre */
-    .match-card {
-        background-color: #1a1c23;
-        border: 1px solid #2d2f39;
-        padding: 12px;
-        border-radius: 12px;
-        margin-bottom: 10px;
-    }
-    
-    .team-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 5px 0;
-    }
-    
-    .team-info { display: flex; align-items: center; gap: 10px; }
-    .team-logo { width: 25px; height: 25px; }
-    .team-name { font-size: 0.95em; font-weight: 500; color: #ffffff; }
-    .score { font-weight: bold; color: #00ff88; font-size: 1.1em; }
-
-    /* Badges Marchés */
-    .market-container { display: flex; gap: 5px; margin-top: 10px; overflow-x: auto; }
-    .market-badge {
-        background-color: #262932;
-        color: #00ff88;
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-size: 0.75em;
-        font-weight: bold;
-        border: 1px solid #3e414b;
-        white-space: nowrap;
-    }
-
-    /* Badge Live Clignotant */
-    .live-dot {
-        color: #ff4b4b;
-        font-weight: bold;
-        animation: blink 1s infinite;
-        font-size: 0.8em;
-    }
-    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
-    
-    /* Tabs personnalisés */
-    .stTabs [data-baseweb="tab-list"] { background-color: #0e1117; }
-    .stTabs [data-baseweb="tab"] { color: #888; }
-    .stTabs [data-baseweb="tab-highlight"] { background-color: #00ff88; }
+    .main {{ background-color: #0e1117; }}
+    .promo-banner {{ background: linear-gradient(90deg, #1d976c 0%, #93f9b9 100%); color: #000 !important; padding: 12px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 15px; text-decoration: none; display: block; }}
+    .match-card {{ background-color: #1a1c23; border: 1px solid #2d2f39; padding: 12px; border-radius: 12px; margin-bottom: 10px; }}
+    .team-row {{ display: flex; justify-content: space-between; align-items: center; margin: 5px 0; }}
+    .team-info {{ display: flex; align-items: center; gap: 10px; color: white; }}
+    .team-logo {{ width: 22px; height: 22px; }}
+    .score-live {{ color: #00ff88; font-weight: bold; }}
+    .live-badge-static {{ color: white; background-color: #ff4b4b; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: bold; }}
+    .market-badge {{ background-color: #262932; color: #00ff88; padding: 4px 8px; border-radius: 6px; font-size: 0.75em; font-weight: bold; border: 1px solid #3e414b; margin-right: 5px; margin-top: 8px; display: inline-block; }}
     </style>
 """, unsafe_allow_html=True)
-
-# --- ÉDITION ADMIN (PROMO) ---
-if 'promo_txt' not in st.session_state: st.session_state['promo_txt'] = "💰 BONUS +200% avec le code : TUNGA20"
-if 'promo_url' not in st.session_state: st.session_state['promo_url'] = "https://1xbet.com"
 
 # --- LOGIQUE PRÉDICTIONS ---
 def get_ai_prediction(h_avg, a_avg):
@@ -101,73 +58,71 @@ def get_ai_prediction(h_avg, a_avg):
     btts = (1-h_p[0]) * (1-a_p[0])
     return f"{w*100:.0f}%", f"{d*100:.0f}%", f"{l*100:.0f}%", f"{ov25*100:.0f}%", f"{btts*100:.0f}%"
 
-# --- SIDEBAR ADMIN ---
-with st.sidebar:
-    st.title("Admin Panel")
-    if st.checkbox("🔑 Login"):
-        if st.text_input("Pass", type="password") == ADMIN_PASSWORD:
-            st.session_state['promo_txt'] = st.text_input("Texte Promo", st.session_state['promo_txt'])
-            st.session_state['promo_url'] = st.text_input("Lien", st.session_state['promo_url'])
+# --- HEADER & PROMO ---
+if 'promo_text' not in st.session_state: st.session_state['promo_text'] = "💰 BONUS +200% CODE: TUNGA20"
+if 'promo_link' not in st.session_state: st.session_state['promo_link'] = "https://1xbet.com"
 
-# --- HEADER APP ---
-st.markdown(f'<a href="{st.session_state["promo_url"]}" class="promo-banner">{st.session_state["promo_txt"]}</a>', unsafe_allow_html=True)
+st.markdown(f'<a href="{st.session_state["promo_link"]}" class="promo-banner">{st.session_state["promo_text"]}</a>', unsafe_allow_html=True)
 
-tab_live, tab_prono, tab_yesterday = st.tabs(["🎮 LIVE", "📈 PRONOS", "📚 HISTORIQUE"])
+# Tabs
+tab_live, tab_prono, tab_hist = st.tabs([f"🎮 {L['live']}", f"📈 {L['prono']}", f"📚 {L['hist']}"])
 
-def fetch(p):
+def fetch(params):
     headers = {'x-rapidapi-key': API_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
-    try: return requests.get("https://v3.football.api-sports.io/fixtures", headers=headers, params=p).json().get('response', [])
+    try: return requests.get("https://v3.football.api-sports.io/fixtures", headers=headers, params=params).json().get('response', [])
     except: return []
 
-# --- 1. ONGLET LIVE ---
+# --- 1. LIVE ---
 with tab_live:
-    st_autorefresh(interval=60000, key="refresh")
     lives = fetch({'live': 'all'})
-    if not lives: st.info("Attente de matchs en direct...")
+    if not lives: st.info("No matches live...")
     for m in lives:
         st.markdown(f"""
         <div class="match-card">
-            <div style="font-size:0.7em; color:#888;">{m['league']['name']} • <span class="live-dot">● {m['fixture']['status']['elapsed']}'</span></div>
+            <div style="font-size:0.7em; color:#888; margin-bottom:5px;">{m['league']['name']} • <span class="live-badge-static">● {m['fixture']['status']['elapsed']}'</span></div>
             <div class="team-row">
-                <div class="team-info"><img src="{m['teams']['home']['logo']}" class="team-logo"><span class="team-name">{m['teams']['home']['name']}</span></div>
-                <div class="score">{m['goals']['home']}</div>
+                <div class="team-info"><img src="{m['teams']['home']['logo']}" class="team-logo"><span>{m['teams']['home']['name']}</span></div>
+                <div class="score-live">{m['goals']['home']}</div>
             </div>
             <div class="team-row">
-                <div class="team-info"><img src="{m['teams']['away']['logo']}" class="team-logo"><span class="team-name">{m['teams']['away']['name']}</span></div>
-                <div class="score">{m['goals']['away']}</div>
+                <div class="team-info"><img src="{m['teams']['away']['logo']}" class="team-logo"><span>{m['teams']['away']['name']}</span></div>
+                <div class="score-live">{m['goals']['away']}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-# --- 2. ONGLET PRONOS (1X2, Over, BTTS) ---
+# --- 2. PRONOSTICS (1X2, OVER, BTTS) ---
 with tab_prono:
     fixtures = fetch({'date': datetime.now().strftime('%Y-%m-%d')})
     for f in fixtures:
         if f['fixture']['status']['short'] in ['NS', 'TBD']:
-            w, d, l, ov, bt = get_ai_prediction(1.6, 1.3) # Simulé
+            w, d, l, ov, bt = get_ai_prediction(1.6, 1.2)
             st.markdown(f"""
             <div class="match-card">
                 <div style="font-size:0.7em; color:#888; margin-bottom:8px;">{f['league']['name']} • {f['fixture']['date'][11:16]}</div>
-                <div class="team-row"><div class="team-info"><img src="{f['teams']['home']['logo']}" class="team-logo"><span class="team-name">{f['teams']['home']['name']}</span></div></div>
-                <div class="team-row"><div class="team-info"><img src="{f['teams']['away']['logo']}" class="team-logo"><span class="team-name">{f['teams']['away']['name']}</span></div></div>
-                <div class="market-container">
-                    <div class="market-badge">1X2: {w}|{d}|{l}</div>
-                    <div class="market-badge">+2.5: {ov}</div>
-                    <div class="market-badge">BTTS: {bt}</div>
-                </div>
+                <div class="team-row"><div class="team-info"><img src="{f['teams']['home']['logo']}" class="team-logo"><span>{f['teams']['home']['name']}</span></div></div>
+                <div class="team-row"><div class="team-info"><img src="{f['teams']['away']['logo']}" class="team-logo"><span>{f['teams']['away']['name']}</span></div></div>
+                <div class="market-badge">1X2: {w}|{d}|{l}</div>
+                <div class="market-badge">Over 2.5: {ov}</div>
+                <div class="market-badge">BTTS: {bt}</div>
             </div>
             """, unsafe_allow_html=True)
 
-# --- 3. HISTORIQUE ---
-with tab_yesterday:
+# --- 3. HISTORIQUE (FT) ---
+with tab_hist:
     yesterday = (datetime.now() - timedelta(1)).strftime('%Y-%m-%d')
     past = fetch({'date': yesterday})
-    for p in past[:20]: # Limité aux 20 premiers
+    for p in past[:15]:
         st.markdown(f"""
         <div class="match-card" style="opacity:0.8;">
             <div class="team-row">
-                <span class="team-name" style="font-size:0.8em;">{p['teams']['home']['name']} {p['goals']['home']} - {p['goals']['away']} {p['teams']['away']['name']}</span>
-                <span style="color:#00ff88; font-size:0.8em;">FINI</span>
+                <div class="team-info"><span style="font-size:0.85em;">{p['teams']['home']['name']} {p['goals']['home']} - {p['goals']['away']} {p['teams']['away']['name']}</span></div>
+                <div style="color:#888; font-size:0.8em; font-weight:bold;">{L['finished']}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+# --- INSTALL APP EXPANDER ---
+with st.expander(f"📲 {L['install']}"):
+    st.write("Android/PC: Menu > Install App")
+    st.write("iOS: Share > Add to Home Screen")
