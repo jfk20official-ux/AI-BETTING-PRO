@@ -7,62 +7,203 @@ import numpy as np
 from scipy.stats import poisson
 import os
 
-# ====================== CONFIGURATION ======================
+# ====================== CONFIGURATION SECRETS ======================
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
-API_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
+API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY", "80da65258a3809f6c7ad2c74930ceb90")
 
 tz = pytz.timezone("Africa/Bujumbura")
 
-if 'mode' not in st.session_state:
-    st.session_state.mode = "Client"
-if st.session_state.mode == "Client":
-    st_autorefresh(interval=90 * 1000, key="refresh")
+# ====================== MULTI-LANGUAGE SUPPORT ======================
+languages = {
+    "English": "English",
+    "Mandarin": "中文",
+    "Hindi": "हिंदी",
+    "Spanish": "Español",
+    "French": "Français",
+    "Arabic": "العربية",
+    "Bengali": "বাংলা",
+    "Portuguese": "Português",
+    "Swahili": "Kiswahili"
+}
 
-st.set_page_config(page_title="AI-BET • Livescore & Pronos", layout="wide")
+translations = {
+    "English": {
+        "title": "AI-BET LIVESCORE & PRONOS",
+        "live": "Live",
+        "upcoming": "Upcoming",
+        "finished": "Finished",
+        "admin_mode": "Admin Mode",
+        "password": "Password",
+        "save": "Save",
+        "no_match": "No match or API problem ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "Over 2.5",
+        "Under2.5": "Under 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "Livescore",
+        "predictions_tab": "Predictions",
+        "statistics_tab": "Statistics"
+    },
+    "Mandarin": {
+        "title": "AI-BET 实时比分 & 预测",
+        "live": "现场",
+        "upcoming": "即将到来",
+        "finished": "完成",
+        "admin_mode": "管理员模式",
+        "password": "密码",
+        "save": "保存",
+        "no_match": "无比赛或 API 问题 ({date_str})",
+        "BTTS": "双方得分",
+        "Over2.5": "超过 2.5",
+        "Under2.5": "低于 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "实时比分",
+        "predictions_tab": "预测",
+        "statistics_tab": "统计数据"
+    },
+    "Hindi": {
+        "title": "AI-BET लाइवस्कोर & प्रोनोस",
+        "live": "लाइव",
+        "upcoming": "आगामी",
+        "finished": "समाप्त",
+        "admin_mode": "एडमिन मोड",
+        "password": "पासवर्ड",
+        "save": "सहेजें",
+        "no_match": "कोई मैच नहीं या API समस्या ({date_str})",
+        "BTTS": "बीटीटीएस",
+        "Over2.5": "ओवर 2.5",
+        "Under2.5": "अंडर 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "लाइवस्कोर",
+        "predictions_tab": "भविष्यवाणियां",
+        "statistics_tab": "सांख्यिकी"
+    },
+    "Spanish": {
+        "title": "AI-BET LIVESCORE & PRONOS",
+        "live": "En directo",
+        "upcoming": "Próximos",
+        "finished": "Terminados",
+        "admin_mode": "Modo Admin",
+        "password": "Contraseña",
+        "save": "Guardar",
+        "no_match": "No hay partido o problema API ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "Más de 2.5",
+        "Under2.5": "Menos de 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "Livescore",
+        "predictions_tab": "Predicciones",
+        "statistics_tab": "Estadísticas"
+    },
+    "French": {
+        "title": "AI-BET LIVESCORE & PRONOS",
+        "live": "En direct",
+        "upcoming": "À venir",
+        "finished": "Terminés",
+        "admin_mode": "Mode Admin",
+        "password": "Mot de passe",
+        "save": "Enregistrer",
+        "no_match": "Aucun match ou problème API ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "Plus de 2.5",
+        "Under2.5": "Moins de 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "Livescore",
+        "predictions_tab": "Prédictions",
+        "statistics_tab": "Statistiques"
+    },
+    "Arabic": {
+        "title": "AI-BET نتيجة مباشرة & تنبؤات",
+        "live": "مباشر",
+        "upcoming": "قادم",
+        "finished": "منتهي",
+        "admin_mode": "وضع المسؤول",
+        "password": "كلمة المرور",
+        "save": "تسجيل",
+        "no_match": "لا مباراة أو مشكلة API ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "أكثر من 2.5",
+        "Under2.5": "أقل من 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "نتيجة مباشرة",
+        "predictions_tab": "تنبؤات",
+        "statistics_tab": "إحصاءات"
+    },
+    "Bengali": {
+        "title": "AI-BET লাইভস্কোর & প্রোনোস",
+        "live": "লাইভ",
+        "upcoming": "আসন্ন",
+        "finished": "শেষ",
+        "admin_mode": "অ্যাডমিন মোড",
+        "password": "পাসওয়ার্ড",
+        "save": "সংরক্ষণ",
+        "no_match": "কোনও ম্যাচ নেই বা API সমস্যা ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "ওভার 2.5",
+        "Under2.5": "আন্ডার 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "লাইভস্কোর",
+        "predictions_tab": "ভবিষ্যদ্বাণী",
+        "statistics_tab": "পরিসংখ্যান"
+    },
+    "Portuguese": {
+        "title": "AI-BET LIVESCORE & PRONOS",
+        "live": "Ao vivo",
+        "upcoming": "A vir",
+        "finished": "Terminados",
+        "admin_mode": "Modo Admin",
+        "password": "Senha",
+        "save": "Salvar",
+        "no_match": "Nenhum jogo ou problema API ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "Mais de 2.5",
+        "Under2.5": "Menos de 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "Livescore",
+        "predictions_tab": "Previsões",
+        "statistics_tab": "Estatísticas"
+    },
+    "Swahili": {
+        "title": "AI-BET LIVESCORE & PRONOS",
+        "live": "Moja kwa moja",
+        "upcoming": "Kuja",
+        "finished": "Iliyokamilishwa",
+        "admin_mode": "Hali ya Admin",
+        "password": "Neno la siri",
+        "save": "Hifadhi",
+        "no_match": "Hakuna mechi au tatizo API ({date_str})",
+        "BTTS": "BTTS",
+        "Over2.5": "Zaidi ya 2.5",
+        "Under2.5": "Chini ya 2.5",
+        "1X2": "1X2",
+        "livescore_tab": "Livescore",
+        "predictions_tab": "Tabiri",
+        "statistics_tab": "Takwimu"
+    }
+}
 
-# Style
-st.markdown("""
-<style>
-    .stApp { background: #f8f9fa; }
-    .match-card { background: white; border-radius: 8px; padding: 12px; margin-bottom: 12px;
-                  box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; }
-    .time-col { min-width: 70px; text-align: center; font-weight: bold; }
-    .time { font-size: 1.1rem; }
-    .status-live { color: #dc3545; font-weight: 900; }
-    .status-fin { color: #6c757d; }
-    .teams { flex-grow: 1; }
-    .team-row { display: flex; justify-content: space-between; font-size: 1rem; margin: 4px 0; }
-    .team-name { font-weight: 600; }
-    .score { font-weight: 900; min-width: 30px; text-align: center; }
-    .proba-box { background: #e9f5ff; border-radius: 6px; padding: 6px 10px;
-                 font-weight: bold; font-size: 0.9rem; text-align: center; min-width: 50px; }
-    .proba-1 { background: #d4edda; color: #155724; }
-    .proba-x { background: #fff3cd; color: #856404; }
-    .proba-2 { background: #f8d7da; color: #721c24; }
-    .win-border { border-left: 5px solid #28a745; }
-    .loss-border { border-left: 5px solid #dc3545; }
-    .wait-border { border-left: 5px solid #ffc107; }
-</style>
-""", unsafe_allow_html=True)
+# ====================== LANGUAGE SELECTION ======================
+selected_lang = st.sidebar.selectbox("Language", list(languages.keys()))
+tr = translations[selected_lang]
 
 # Sidebar
 with st.sidebar:
     st.header("AI-BET")
-    toggle = st.toggle("Mode Admin")
+    toggle = st.toggle(tr["admin_mode"])
     if toggle:
-        pwd = st.text_input("Mot de passe", type="password")
+        pwd = st.text_input(tr["password"], type="password")
         if pwd == ADMIN_PASSWORD:
             st.session_state.mode = "Admin"
             st.success("Admin OK")
         else:
             st.session_state.mode = "Client"
-            if pwd: st.error("Mot de passe incorrect")
+            if pwd: st.error("Incorrect")
     else:
         st.session_state.mode = "Client"
 
     show_tomorrow = st.checkbox("Demain", value=False)
 
-# Poisson
+# Poisson with BTTS, Over/Under 2.5
 def get_poisson_proba(home, away):
     lambda_home = 1.8
     lambda_away = 1.3
@@ -75,76 +216,38 @@ def get_poisson_proba(home, away):
     px = np.sum(np.diag(matrix)) * 100
     p2 = np.sum(np.triu(matrix, 1)) * 100
     over25 = (1 - sum(np.diag(matrix, k).sum() for k in range(-2, 3))) * 100
+    under25 = 100 - over25
+    btts = (1 - matrix[0,0] - sum(matrix[i,0] for i in range(1, MAX_GOALS+1)) - sum(matrix[0,j] for j in range(1, MAX_GOALS+1))) * 100
 
     return {
-        "1": round(p1, 1),
-        "X": round(px, 1),
-        "2": round(p2, 1),
-        "Over2.5": round(over25, 1)
+        "1X2": {
+            "1": round(p1, 1),
+            "X": round(px, 1),
+            "2": round(p2, 1)
+        },
+        "Over2.5": round(over25, 1),
+        "Under2.5": round(under25, 1),
+        "BTTS": round(btts, 1)
     }
 
-# ====================== FETCH MATCHS - 3 SOURCES GRATUITES ======================
-@st.cache_data(ttl=60, show_spinner="Chargement des matchs...")
+# Fetch fixtures (your current function, or replace with mixed if needed)
+@st.cache_data(ttl=60)
 def fetch_fixtures(date_str):
-    # 1. TheSportsDB (priorité 1 - très large couverture)
+    if not API_KEY:
+        return []
+    url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
+    headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
     try:
-        url = f"https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date_str}"
-        r = requests.get(url, timeout=10).json()
-        events = r.get("events", [])
-        fixtures = []
-        for e in events:
-            fixtures.append({
-                "fixture": {
-                    "id": e.get("idEvent"),
-                    "date": e.get("dateEvent") + "T" + e.get("strTime", "00:00:00"),
-                    "status": {"short": "NS" if e.get("strStatus") == "Not Started" else "FT"}
-                },
-                "teams": {
-                    "home": {"name": e.get("strHomeTeam")},
-                    "away": {"name": e.get("strAwayTeam")}
-                },
-                "goals": {"home": e.get("intHomeScore"), "away": e.get("intAwayScore")}
-            })
-        if fixtures:
-            return fixtures
-    except:
-        pass
-
-    # 2. Football-Data.org (priorité 2)
-    try:
-        url = f"https://api.football-data.org/v4/matches?date={date_str}"
-        headers = {"X-Auth-Token": "votre_clé_football_data"}  # gratuit après inscription
-        r = requests.get(url, headers=headers, timeout=8)
-        if r.status_code == 200:
-            return r.json().get("matches", [])
-    except:
-        pass
-
-    # 3. API-Football (priorité 3 - ta clé actuelle)
-    try:
-        url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-        headers = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}
         r = requests.get(url, headers=headers, timeout=8).json()
-        if not r.get("errors"):
-            return r.get("response", [])
+        return r.get("response", []) if not r.get("errors") else []
     except:
-        pass
+        return []
 
-    st.warning("Aucune source de données disponible aujourd'hui.")
-    return []
+# ====================== AFFICHAGE AVEC TABS ======================
+tabs = st.tabs([tr["livescore_tab"], tr["predictions_tab"], tr["statistics_tab"]])
 
-# ====================== AFFICHAGE ======================
-if st.session_state.mode == "Admin":
-    st.subheader("Panel Admin - Prono")
-    mid = st.text_input("ID Match")
-    p = st.selectbox("Prono", ["1", "X", "2"])
-    if st.button("Enregistrer"):
-        if mid:
-            if 'pronos' not in st.session_state: st.session_state.pronos = {}
-            st.session_state.pronos[mid] = {"p": p}
-            st.success("Prono enregistré")
-else:
-    st.markdown("<h3 style='text-align:center; color:#1A73E8;'>AI-BET LIVESCORE & PRONOS</h3>", unsafe_allow_html=True)
+with tabs[0]:  # Livescore
+    st.markdown("<h3 style='text-align:center; color:#1A73E8;'>"+tr["title"]+"</h3>", unsafe_allow_html=True)
 
     target = datetime.now(tz).date()
     if show_tomorrow: target += timedelta(days=1)
@@ -153,25 +256,25 @@ else:
     fixtures = fetch_fixtures(date_str)
 
     if not fixtures:
-        st.info(f"Aucun match trouvé pour le {date_str}")
+        st.info(f"Aucun match ou problème API ({date_str})")
     else:
         for group, title in [
-            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') in ['1H','HT','2H']], "En direct"),
-            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') == 'NS'], "À venir"),
-            ([m for m in fixtures if m.get('fixture', {}).get('status', {}).get('short') == 'FT'], "Terminés")
+            ([m for m in fixtures if m['fixture']['status']['short'] in ['1H','HT','2H']], tr["live"]),
+            ([m for m in fixtures if m['fixture']['status']['short'] == 'NS'], tr["upcoming"]),
+            ([m for m in fixtures if m['fixture']['status']['short'] == 'FT'], tr["finished"])
         ]:
             if group:
                 st.subheader(title)
-                for m in sorted(group, key=lambda x: x.get('fixture', {}).get('date', '')):
-                    fid = str(m.get('fixture', {}).get('id', ''))
-                    h = m.get('teams', {}).get('home', {}).get('name', 'Unknown')
-                    a = m.get('teams', {}).get('away', {}).get('name', 'Unknown')
-                    sh = m.get('goals', {}).get('home', '-')
-                    sa = m.get('goals', {}).get('away', '-')
-                    stt = m.get('fixture', {}).get('status', {}).get('short', 'NS')
-                    el = m.get('fixture', {}).get('status', {}).get('elapsed', '')
+                for m in sorted(group, key=lambda x: x['fixture']['date']):
+                    fid = str(m['fixture']['id'])
+                    h = m['teams']['home']['name']
+                    a = m['teams']['away']['name']
+                    sh = m['goals']['home'] if m['goals']['home'] is not None else "-"
+                    sa = m['goals']['away'] if m['goals']['away'] is not None else "-"
+                    stt = m['fixture']['status']['short']
+                    el = m['fixture']['status']['elapsed'] or ""
 
-                    dt = datetime.fromisoformat(str(m.get('fixture', {}).get('date', '2026-01-01T00:00:00')).replace("Z", "+00:00")).astimezone(tz)
+                    dt = datetime.fromisoformat(m['fixture']['date'].replace("Z", "+00:00")).astimezone(tz)
                     heure = dt.strftime("%H:%M")
                     jour = dt.strftime("%d/%m")
 
@@ -187,9 +290,9 @@ else:
                     proba_html = ""
                     if stt == "NS" and not prono_html:
                         proba = get_poisson_proba(h, a)
-                        p1 = proba["1"]
-                        px = proba["X"]
-                        p2 = proba["2"]
+                        p1 = proba["1X2"]["1"]
+                        px = proba["1X2"]["X"]
+                        p2 = proba["1X2"]["2"]
                         o25 = proba["Over2.5"]
                         proba_html = f"""
                         <div style="display:flex; gap:6px; margin-top:6px;">
@@ -220,3 +323,27 @@ else:
                         {prono_html}
                     </div>
                     """, unsafe_allow_html=True)
+
+with tabs[1]:  # Predictions
+    st.subheader(tr["predictions_tab"])
+    upcoming = [m for m in fixtures if m['fixture']['status']['short'] == 'NS']
+    for m in upcoming:
+        h = m['teams']['home']['name']
+        a = m['teams']['away']['name']
+        proba = get_poisson_proba(h, a)
+        st.write(f"{h} vs {a}")
+        st.write(f"1X2: 1 {proba['1X2']['1']}% | X {proba['1X2']['X']}% | 2 {proba['1X2']['2']}%")
+        st.write(f"BTTS: {proba['BTTS']}%")
+        st.write(f"Over 2.5: {proba['Over2.5']}% | Under 2.5: {proba['Under2.5']}%")
+
+with tabs[2]:  # Statistics
+    st.subheader(tr["statistics_tab"])
+    upcoming = [m for m in fixtures if m['fixture']['status']['short'] == 'NS']
+    for m in upcoming:
+        h = m['teams']['home']['name']
+        a = m['teams']['away']['name']
+        proba = get_poisson_proba(h, a)
+        st.write(f"{h} vs {a}")
+        st.write(f"Expected goals home: {1.8} | away: {1.3}")
+        st.write(f"Prob of clean sheet home: {round(poisson.pmf(0, lambda_away) * 100, 1)}%")
+        st.write(f"Prob of clean sheet away: {round(poisson.pmf(0, lambda_home) * 100, 1)}%")
