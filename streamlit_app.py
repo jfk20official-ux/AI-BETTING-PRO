@@ -105,5 +105,4 @@ else:
 
 
 
-Veux-tu que j'ajoute maintenant le bouton de téléchargement de l'APK dans le menu ?
 
