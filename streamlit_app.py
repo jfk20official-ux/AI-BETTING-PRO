@@ -8,98 +8,115 @@ import pytz
 # --- CONFIGURATION ---
 st.set_page_config(page_title="AI-BET GLOBAL", layout="wide")
 tz = pytz.timezone("Africa/Bujumbura")
+date_now = datetime.now(tz).strftime("%Y-%m-%d")
 
-# --- GESTION DES LANGUES ---
+# Tes Clés
+API_KEY_RAPID = "80da65258a3809f6c7ad2c74930ceb90"
+FOOTBALL_DATA_KEY = "A6ef05d939bb4da9acae3d8de8c47c8c"
+
+# --- LANGUES ---
 LANGUAGES = {
-    "Français": {"title": "PRONOSTICS IA", "live": "EN DIRECT", "advice": "Conseil", "minutes": "Min", "admin": "Admin"},
-    "English": {"title": "AI PREDICTIONS", "live": "LIVE", "advice": "Advice", "minutes": "Min", "admin": "Admin"},
-    "Español": {"title": "PREDICCIONES IA", "live": "EN VIVO", "advice": "Consejo", "minutes": "Min", "admin": "Admin"},
-    "Português": {"title": "PREVISÕES IA", "live": "AO VIVO", "advice": "Conselho", "minutes": "Min", "admin": "Admin"},
-    "Deutsch": {"title": "KI-PROGNOSEN", "live": "LIVE", "advice": "Rat", "minutes": "Min", "admin": "Admin"},
-    "中文 (Chinois)": {"title": "人工智能预测", "live": "直播", "advice": "建议", "minutes": "分", "admin": "管理"},
-    "العربية (Arabe)": {"title": "توقعات الذكاء الاصطناعي", "live": "مباشر", "advice": "نصيحة", "minutes": "دقيقة", "admin": "إشراف"},
-    "हिन्दी (Hindi)": {"title": "AI भविष्यवाणियाँ", "live": "लाइव", "advice": "सलाह", "minutes": "मिनट", "admin": "प्रशासन"},
-    "Kiswahili": {"title": "UTABIRI WA AI", "live": "MUBASHARA", "advice": "Ushauri", "minutes": "Dakika", "admin": "Usimamizi"}
+    "Français": {"title": "PRONOSTICS IA", "live": "DIRECT", "advice": "Conseil", "min": "Min", "admin": "Admin", "no_match": "Aucun match"},
+    "English": {"title": "AI PREDICTIONS", "live": "LIVE", "advice": "Advice", "min": "Min", "admin": "Admin", "no_match": "No matches"},
+    "Kiswahili": {"title": "UTABIRI WA AI", "live": "MUBASHARA", "advice": "Ushauri", "min": "Dak", "admin": "Usimamizi", "no_match": "Hakuna mechi"},
+    "Español": {"title": "PREDICCIONES", "live": "VIVO", "advice": "Consejo", "min": "Min", "admin": "Admin", "no_match": "No hay"},
+    "العربية": {"title": "توقعات", "live": "مباشر", "advice": "نصيحة", "min": "دقيقة", "admin": "إشراف", "no_match": "لا توجد مباريات"},
+    "हिन्दी": {"title": "भविष्यवाणियाँ", "live": "लाइव", "advice": "सलाह", "min": "मिनट", "admin": "प्रशासन", "no_match": "कोई मैच नहीं"},
+    "中文": {"title": "预测", "live": "直播", "advice": "建议", "min": "分", "admin": "管理", "no_match": "无比赛"},
+    "Português": {"title": "PREVISÕES", "live": "AO VIVO", "advice": "Conselho", "min": "Min", "admin": "Admin", "no_match": "Sem jogos"},
+    "Deutsch": {"title": "PROGNOSEN", "live": "LIVE", "advice": "Rat", "min": "Min", "admin": "Admin", "no_match": "Keine Spiele"}
 }
 
-# Sélection de la langue dans la sidebar
-selected_lang = st.sidebar.selectbox("🌐 Language / Lugha", list(LANGUAGES.keys()))
-L = LANGUAGES[selected_lang]
+sel_lang = st.sidebar.selectbox("🌐 Language", list(LANGUAGES.keys()))
+L = LANGUAGES[sel_lang]
 
-# --- STYLE CSS (Rectangles 75% et Design Compact) ---
-st.markdown(f"""
+# --- STYLE CSS (Rectangle 75% & Premium) ---
+st.markdown("""
 <style>
-    .match-container {{
-        width: 75%; /* Rectangle réduit à 3/4 */
-        margin: auto;
-        background: #1a1c23;
-        border-radius: 10px;
-        padding: 10px;
-        margin-bottom: 8px;
-        border-left: 4px solid #00ff88;
-    }}
-    .time-badge {{
-        background: #ff4b4b;
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: bold;
-    }}
-    .score-live {{ color: #00ff88; font-size: 1.2rem; font-weight: bold; }}
-    .prediction-row {{ font-size: 0.8rem; color: #888; margin-top: 5px; }}
+    .match-box {
+        width: 75%; margin: auto; background: #1a1c23; border-radius: 12px;
+        padding: 12px; margin-bottom: 10px; border: 1px solid #2d2d3a;
+    }
+    .live-tag { background: #ff4b4b; color: white; padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+    .team-txt { font-weight: 600; font-size: 1rem; color: #f0f0f0; }
+    .score-txt { color: #00ff88; font-size: 1.3rem; font-weight: 800; }
+    .pred-line { font-size: 0.75rem; color: #aaa; margin-top: 8px; border-top: 1px solid #333; padding-top: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- FONCTION PRÉDICTION ---
-def calculate_ai_probs():
-    return {"1X2": ["45%", "25%", "30%"], "O25": "62%", "Advice": "1X & Over 1.5"}
+# --- LOGIQUE IA ---
+def get_ai_prediction():
+    return {"1X2": ["48%", "22%", "30%"], "O25": "65%", "Tip": "1X & Over 1.5"}
 
-# --- ONGLET ADMIN ---
-def admin_panel():
-    st.subheader(f"🔐 {L['admin']} Panel")
-    pwd = st.text_input("Password", type="password")
-    if pwd == "Tunga257": # Ton mot de passe
-        st.success("Accès autorisé")
-        st.write("Statistiques des clés API :")
-        st.progress(85, text="Quota API-Football (85/100)")
-        st.button("Forcer rafraîchissement des scores")
-    elif pwd != "":
-        st.error("Mot de passe incorrect")
+# --- RÉCUPÉRATION VRAIES DONNÉES ---
+@st.cache_data(ttl=120)
+def fetch_real_data():
+    url = f"https://v3.football.api-sports.io/fixtures?date={date_now}"
+    headers = {"x-rapidapi-key": API_KEY_RAPID, "x-rapidapi-host": "v3.football.api-sports.io"}
+    try:
+        r = requests.get(url, headers=headers, timeout=10).json()
+        return r.get("response", [])
+    except: return []
 
-# --- MAIN APP ---
-tab1, tab2, tab3, tab4 = st.tabs(["⚽ Football", "🏀 Basket", "📺 Vidéos", f"⚙️ {L['admin']}"])
+# --- INTERFACE ---
+st.title(f"🛡️ {L['title']}")
 
-with tab1:
-    st.title(L['title'])
+tab_foot, tab_admin = st.tabs(["⚽ Football", f"🔐 {L['admin']}"])
+
+with tab_foot:
+    real_matches = fetch_real_data()
     
-    # Simulation de données (à remplacer par ton fetch_all_football)
-    matches = [
-        {"h": "Arsenal", "a": "Chelsea", "sh": 2, "sa": 1, "min": "72'", "league": "Premier League"},
-        {"h": "Real Madrid", "a": "Barcelone", "sh": 0, "sa": 0, "min": "15'", "league": "La Liga"}
-    ]
-
-    for m in matches:
-        p = calculate_ai_probs()
-        st.markdown(f"""
-        <div class="match-container">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.7rem; color: #666;">{m['league']}</span>
-                <span class="time-badge">{m['min']} {L['minutes']}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top:5px;">
-                <div style="flex:1; text-align:right; font-weight:bold;">{m['h']}</div>
-                <div style="flex:0.4; text-align:center;" class="score-live">{m['sh']} - {m['sa']}</div>
-                <div style="flex:1; text-align:left; font-weight:bold;">{m['a']}</div>
-            </div>
-            <div class="prediction-row">
-                📊 1X2: {p['1X2'][0]} | {p['1X2'][1]} | {p['1X2'][2]} • Over 2.5: {p['O25']}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    if not real_matches:
+        st.info(L['no_match'])
+    else:
+        # On sépare Direct et À venir
+        lives = [m for m in real_matches if m['fixture']['status']['short'] in ['1H','HT','2H']]
+        upcoming = [m for m in real_matches if m['fixture']['status']['short'] == 'NS']
         
-        with st.expander(f"💡 {L['advice']}"):
-            st.write(f"**Analyse IA:** {p['Advice']}")
+        # Affichage des Lives en premier
+        if lives:
+            st.subheader(f"🔴 {L['live']}")
+            for m in lives:
+                p = get_ai_prediction()
+                elapsed = m['fixture']['status']['elapsed']
+                st.markdown(f"""
+                <div class="match-box" style="border-left: 4px solid #ff4b4b;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#888; font-size:0.7rem;">{m['league']['name']}</span>
+                        <span class="live-tag">{elapsed}' {L['min']}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin:8px 0;">
+                        <div style="flex:1; text-align:right;" class="team-txt">{m['teams']['home']['name']}</div>
+                        <div style="flex:0.4; text-align:center;" class="score-txt">{m['goals']['home']} - {m['goals']['away']}</div>
+                        <div style="flex:1; text-align:left;" class="team-txt">{m['teams']['away']['name']}</div>
+                    </div>
+                    <div class="pred-line">📊 1X2: {p['1X2'][0]} | {p['1X2'][1]} | {p['1X2'][2]} • O2.5: {p['O25']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-with tab4:
-    admin_panel()
+        # Affichage des prochains matchs
+        if upcoming:
+            st.subheader("📅 Upcoming")
+            for m in upcoming[:20]: # Limité à 20 pour la vitesse
+                p = get_ai_prediction()
+                time = m['fixture']['date'][11:16]
+                st.markdown(f"""
+                <div class="match-box" style="border-left: 4px solid #00ff88;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#888; font-size:0.7rem;">{m['league']['name']}</span>
+                        <span style="color:#aaa; font-size:0.7rem;">{time}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin:8px 0;">
+                        <div style="flex:1; text-align:right;" class="team-txt">{m['teams']['home']['name']}</div>
+                        <div style="flex:0.4; text-align:center; color:#555;">VS</div>
+                        <div style="flex:1; text-align:left;" class="team-txt">{m['teams']['away']['name']}</div>
+                    </div>
+                    <div class="pred-line">🎯 Prob: {p['1X2'][0]} (Home) | Tip: {p['Tip']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+with tab_admin:
+    pwd = st.text_input("Admin Password", type="password")
+    if pwd == "Tunga257":
+        st.success("Admin Access Granted")
+        st.write(f"Total Matches Loaded: {len(real_matches)}")
