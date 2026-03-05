@@ -1,140 +1,131 @@
-import streamlit as st
-import requests
-from datetime import datetime, timedelta
-import pytz
-from streamlit_autorefresh import st_autorefresh
-import numpy as np
-from scipy.stats import poisson
-import os
+import sys
+import random
+import string
+from datetime import datetime
 
-# ====================== CONFIGURATION ======================
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Tunga25721204301")
-API_FOOTBALL_KEY = "80da65258a3809f6c7ad2c74930ceb90"
-FOOTBALL_DATA_KEY = "A6ef05d939bb4da9acae3d8de8c47c8c"
+# ================================================
+# CONFIGURATION JFK20 - Édition par l'utilisateur
+# ================================================
 
-tz = pytz.timezone("Africa/Bujumbura")
+# Code promo généré par Grok AI (changeable à volonté)
+def generate_jfk20_code(length=8):
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=length))
 
-if 'mode' not in st.session_state:
-    st.session_state.mode = "Client"
-if st.session_state.mode == "Client":
-    st_autorefresh(interval=90 * 1000, key="refresh")
+JFK20_PROMO_CODE = generate_jfk20_code()   # ← Change ici si tu veux un code fixe (ex: "JFK2025X")
 
-st.set_page_config(page_title="AI-BET EXPERT", layout="wide", initial_sidebar_state="collapsed")
+# ================================================
+# COULEURS EXACTEMENT COMME FOREBET (vert/jaune/rouge + bold)
+# ================================================
+class ForebetColors:
+    GREEN = '\033[92m'   # Prob > 65% → très probable
+    YELLOW = '\033[93m'  # 50% à 65%
+    RED = '\033[91m'     # < 50%
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
 
-# ====================== STYLE MODERNE ======================
-st.markdown("""
-<style>
-    .block-container { padding: 0 !important; background: #0b0e11; }
-    .sticky-nav { position: fixed; top: 0; width: 100%; z-index: 1000; background: #161920; 
-                  display: flex; overflow-x: auto; padding: 12px; gap: 10px; border-bottom: 2px solid #2d3442; }
-    .nav-btn { background: #212630; color: white; padding: 8px 20px; border-radius: 6px; 
-               font-weight: bold; white-space: nowrap; border: 1px solid #3e4451; }
-    .match-card { background: #161920; border-radius: 10px; padding: 15px; margin: 12px 0; color: white; }
-    .prob-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-    .prob-header { background: #212630; color: #ffca28; font-weight: bold; }
-    .prob-val { font-size: 1.2rem; font-weight: bold; }
-    .res-pos { color: #00ff88; font-weight: bold; }
-</style>
-""", unsafe_allow_html=True)
-
-# ====================== NAVIGATION TABS ======================
-tab1, tab2, tab3, tab4 = st.tabs(["🏟️ Livescore", "🔮 1X2 Pronos", "⚽ BTTS & Over 2.5", "📊 Statistiques"])
-
-# ====================== POISSON AVEC BTTS & OVER ======================
-def get_poisson_proba(home, away):
-    λh = 1.8
-    λa = 1.3
-    MAX = 6
-    matrix = np.outer(poisson.pmf(np.arange(MAX+1), λh), poisson.pmf(np.arange(MAX+1), λa))
-    p1 = np.sum(np.tril(matrix, -1)) * 100
-    px = np.sum(np.diag(matrix)) * 100
-    p2 = np.sum(np.triu(matrix, 1)) * 100
-    over25 = (1 - sum(np.diag(matrix, k).sum() for k in range(-2,3))) * 100
-    btts = (1 - matrix[0,0] - sum(matrix[i,0] for i in range(1,MAX+1)) - sum(matrix[0,j] for j in range(1,MAX+1))) * 100
-
-    return {"1": round(p1,1), "X": round(px,1), "2": round(p2,1),
-            "Over2.5": round(over25,1), "BTTS": round(btts,1)}
-
-# ====================== FETCH 3 SOURCES ======================
-@st.cache_data(ttl=300)
-def fetch_all_sources():
-    date_str = datetime.now(tz).strftime("%Y-%m-%d")
-
-    # 1. TheSportsDB (priorité)
-    try:
-        r = requests.get(f"https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={date_str}", timeout=8).json()
-        events = r.get("events", [])
-        if events:
-            return [{"fixture": {"id": e.get("idEvent"), "date": e.get("dateEvent")+"T"+e.get("strTime","00:00:00"),
-                                 "status": {"short": "NS"}},
-                     "teams": {"home": {"name": e.get("strHomeTeam")}, "away": {"name": e.get("strAwayTeam")}},
-                     "goals": {"home": e.get("intHomeScore"), "away": e.get("intAwayScore")}} for e in events]
-    except: pass
-
-    # 2. Football-Data.org
-    try:
-        r = requests.get("https://api.football-data.org/v4/matches", 
-                         headers={"X-Auth-Token": FOOTBALL_DATA_KEY}, timeout=8).json()
-        if r.get("matches"):
-            return r["matches"]
-    except: pass
-
-    # 3. API-Football (dernier recours)
-    try:
-        r = requests.get(f"https://v3.football.api-sports.io/fixtures?date={date_str}",
-                         headers={"x-rapidapi-key": API_FOOTBALL_KEY, "x-rapidapi-host": "v3.football.api-sports.io"}, timeout=8).json()
-        if r.get("response"):
-            return r["response"]
-    except: pass
-
-    return []
-
-matches = fetch_all_sources()
-
-# ====================== AFFICHAGE ======================
-with tab1:  # Livescore
-    st.markdown("<h2 style='text-align:center; color:#38b6ff;'>🏟️ LIVE & À VENIR</h2>", unsafe_allow_html=True)
-    if not matches:
-        st.error("⚠️ Aucune donnée disponible pour le moment")
+def color_prob(p):
+    if p >= 65:
+        return ForebetColors.GREEN + f"{p}%" + ForebetColors.END
+    elif p >= 50:
+        return ForebetColors.YELLOW + f"{p}%" + ForebetColors.END
     else:
-        for m in matches[:15]:  # limite pour éviter surcharge
-            h = m.get('teams', {}).get('home', {}).get('name') or m.get('homeTeam', {}).get('name', '???')
-            a = m.get('teams', {}).get('away', {}).get('name') or m.get('awayTeam', {}).get('name', '???')
-            hs = m.get('goals', {}).get('home') or m.get('score', {}).get('fullTime', {}).get('home', '-')
-            as_ = m.get('goals', {}).get('away') or m.get('score', {}).get('fullTime', {}).get('away', '-')
-            
-            with st.expander(f"⚽ {h} vs {a}"):
-                st.markdown(f"**Score :** {hs} - {as_}")
-                proba = get_poisson_proba(h, a)
-                st.table({
-                    "1X2": [proba["1"], proba["X"], proba["2"]],
-                    "BTTS": [proba["BTTS"], "-", "-"],
-                    "Over 2.5": [proba["Over2.5"], "-", "-"]
-                })
+        return ForebetColors.RED + f"{p}%" + ForebetColors.END
 
-with tab2:  # 1X2 Pronos
-    st.markdown("<h2 style='text-align:center; color:#ffca28;'>🔮 1X2 & PRONOS IA</h2>", unsafe_allow_html=True)
-    for m in matches:
-        h = m.get('teams', {}).get('home', {}).get('name') or m.get('homeTeam', {}).get('name', '???')
-        a = m.get('teams', {}).get('away', {}).get('name') or m.get('awayTeam', {}).get('name', '???')
-        proba = get_poisson_proba(h, a)
-        st.success(f"{h} vs {a} → **1** {proba['1']}% | **X** {proba['X']}% | **2** {proba['2']}%")
+# ================================================
+# DONNÉES DES MATCHS (remplace par ton API plus tard)
+# ================================================
+finished = [
+    {"time": "Terminé", "home": "Real Madrid", "away": "FC Barcelona", "pred": "1", "prob": 72, "score": "3-1"},
+    {"time": "Terminé", "home": "Liverpool", "away": "Manchester City", "pred": "X", "prob": 48, "score": "1-1"},
+]
 
-with tab3:  # BTTS & Over 2.5
-    st.markdown("<h2 style='text-align:center; color:#00ff88;'>⚽ BTTS & OVER / UNDER</h2>", unsafe_allow_html=True)
-    for m in matches:
-        h = m.get('teams', {}).get('home', {}).get('name') or m.get('homeTeam', {}).get('name', '???')
-        a = m.get('teams', {}).get('away', {}).get('name') or m.get('awayTeam', {}).get('name', '???')
-        proba = get_poisson_proba(h, a)
-        st.info(f"{h} vs {a} → BTTS **{proba['BTTS']}%** | Over 2.5 **{proba['Over2.5']}%**")
+in_progress = [
+    {"time": "67'", "home": "PSG", "away": "Olympique Marseille", "pred": "1", "prob": 81, "score": "2-0"},
+    {"time": "23'", "home": "Bayern München", "away": "Borussia Dortmund", "pred": "Over 2.5", "prob": 77, "score": "1-1"},
+]
 
-with tab4:  # Statistiques
-    st.markdown("<h2 style='text-align:center; color:#ff4b4b;'>📊 STATISTIQUES IA</h2>", unsafe_allow_html=True)
-    st.write("Statistiques détaillées en cours de développement...")
+upcoming = [
+    {"time": "Aujourd'hui 21:00", "home": "Chelsea", "away": "Arsenal", "pred": "BTTS", "prob": 58, "score": "-"},
+    {"time": "Demain 18:30", "home": "Juventus", "away": "Inter Milan", "pred": "1X", "prob": 69, "score": "-"},
+]
 
-# Admin Mode
-if st.sidebar.checkbox("Mode Admin"):
-    pwd = st.sidebar.text_input("Mot de passe Admin", type="password")
-    if pwd == ADMIN_PASSWORD:
-        st.sidebar.success("Admin activé")
-        # Tu peux ajouter ici la logique d'enregistrement de pronos
+# ================================================
+# SECTION JFK20 ÉDITABLE - Matches classés par type
+# ================================================
+jfk20_matches = {
+    "1x2": [
+        {"time": "21:00", "home": "AC Milan", "away": "AS Roma", "pred": "1", "prob": 68, "score": "-"},
+        {"time": "20:45", "home": "Ajax", "away": "Feyenoord", "pred": "X", "prob": 52, "score": "-"},
+    ],
+    "BTTS": [
+        {"time": "19:00", "home": "Tottenham", "away": "Newcastle", "pred": "BTTS Oui", "prob": 74, "score": "-"},
+    ],
+    "Over 2.5": [
+        {"time": "22:00", "home": "Atalanta", "away": "Napoli", "pred": "Over 2.5", "prob": 79, "score": "-"},
+        {"time": "18:00", "home": "Leipzig", "away": "Wolfsburg", "pred": "Over 2.5", "prob": 83, "score": "-"},
+    ],
+    "Over 1.5": [
+        {"time": "20:30", "home": "Bayer Leverkusen", "away": "Stuttgart", "pred": "Over 1.5", "prob": 88, "score": "-"},
+    ],
+    "1X": [
+        {"time": "21:00", "home": "Benfica", "away": "Porto", "pred": "1X", "prob": 71, "score": "-"},
+    ],
+    "12": [
+        {"time": "19:45", "home": "Galatasaray", "away": "Fenerbahce", "pred": "12", "prob": 66, "score": "-"},
+    ],
+    "2X": [
+        {"time": "18:30", "home": "Lille", "away": "Lyon", "pred": "2X", "prob": 64, "score": "-"},
+    ],
+}
+
+# ================================================
+# AFFICHAGE IDENTIQUE AU STYLE FOREBET
+# ================================================
+def print_header(title):
+    print("\n" + "="*90)
+    print(f"{ForebetColors.BOLD}{ForebetColors.UNDERLINE}{title.center(90)}{ForebetColors.END}")
+    print("="*90)
+
+def display_match_row(m):
+    print(f"{m['time']:12} │ {m['home']:18} - {m['away']:18} │ {m['pred']:8} │ {color_prob(m['prob']):10} │ {m['score']:6}")
+
+def show_section(section_name, matches_list):
+    print_header(section_name)
+    print(f"{'Heure':12} │ {'Équipes':38} │ {'Prédiction':8} │ {'Probabilité':10} │ {'Score'}")
+    print("-"*90)
+    for m in matches_list:
+        display_match_row(m)
+    print("-"*90)
+
+# ================================================
+# PROGRAMME PRINCIPAL
+# ================================================
+def main():
+    print(f"\n{ForebetColors.BOLD}🚀 CODE PROMO JFK20 GÉNÉRÉ PAR GROK AI : {JFK20_PROMO_CODE}{ForebetColors.END}\n")
+    
+    # Matches terminés
+    show_section("✅ MATCHES TERMINÉS", finished)
+    
+    # Matches en cours
+    show_section("🔴 MATCHES EN COURS", in_progress)
+    
+    # Matches à venir
+    show_section("⏳ MATCHES À VENIR", upcoming)
+    
+    # ====================== SECTION JFK20 ÉDITABLE ======================
+    print_header("🔑 JFK20 ÉDITABLE - Accès réservé")
+    code = input(f"{ForebetColors.BOLD}Entrez le code promo JFK20 : {ForebetColors.END}").strip().upper()
+    
+    if code == JFK20_PROMO_CODE:
+        print(f"{ForebetColors.GREEN}✅ Accès autorisé ! Bienvenue dans la section JFK20{ForebetColors.END}\n")
+        
+        for cat in ["1x2", "BTTS", "Over 2.5", "Over 1.5", "1X", "12", "2X"]:
+            if jfk20_matches[cat]:
+                show_section(f"📌 {cat.upper()}", jfk20_matches[cat])
+    else:
+        print(f"{ForebetColors.RED}❌ Code promo incorrect. Accès refusé.{ForebetColors.END}")
+
+if __name__ == "__main__":
+    main()
