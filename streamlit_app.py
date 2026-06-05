@@ -14,8 +14,33 @@ import os
 st.set_page_config(page_title="AI-BETTING PRO", layout="wide")
 
 tz = pytz.timezone("Africa/Bujumbura")
-
-API_KEY = os.getenv("API_FOOTBALL_KEY", st.secrets.get("API_FOOTBALL_KEY", ""))
+def get_fixtures(date_str):
+    return [
+        {
+            "fixture": {
+                "id": "1",
+                "date": "2026-06-06T18:00:00Z",
+                "status": {"short": "NS"}
+            },
+            "teams": {
+                "home": {"name": "FC Alpha"},
+                "away": {"name": "FC Beta"}
+            },
+            "goals": {"home": None, "away": None}
+        },
+        {
+            "fixture": {
+                "id": "2",
+                "date": "2026-06-06T20:00:00Z",
+                "status": {"short": "NS"}
+            },
+            "teams": {
+                "home": {"name": "Real Test"},
+                "away": {"name": "AI United"}
+            },
+            "goals": {"home": None, "away": None}
+        }
+    ]
 
 # ─────────────────────────────
 # CACHE SESSION (anti quota)
