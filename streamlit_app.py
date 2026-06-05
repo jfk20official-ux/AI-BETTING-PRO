@@ -1,19 +1,57 @@
 import streamlit as st
-import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
-from streamlit_autorefresh import st_autorefresh
 import numpy as np
 from scipy.stats import poisson
-import sqlite3
-import os
+from streamlit_autorefresh import st_autorefresh
 
 # ─────────────────────────────
 # CONFIG
 # ─────────────────────────────
 st.set_page_config(page_title="AI-BETTING PRO", layout="wide")
-
 tz = pytz.timezone("Africa/Bujumbura")
+
+# auto refresh
+st_autorefresh(interval=90 * 1000, key="refresh")
+
+# ─────────────────────────────
+# STYLE
+# ─────────────────────────────
+st.markdown("""
+<style>
+.match {
+    background: white;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.team { font-weight: 600; }
+.score { font-weight: 800; }
+.box {
+    padding: 4px 8px;
+    background: #e9f5ff;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.title {
+    text-align:center;
+    font-size:28px;
+    font-weight:800;
+    margin-bottom:20px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────
+# TITLE
+# ─────────────────────────────
+st.markdown("<div class='title'>⚽ AI-BETTING PRO</div>", unsafe_allow_html=True)
+
+# ─────────────────────────────
+# FAKE MATCHES (SAFE DATA)
+# ─────────────────────────────
 def get_fixtures(date_str):
     return [
         {
@@ -43,91 +81,22 @@ def get_fixtures(date_str):
     ]
 
 # ─────────────────────────────
-# CACHE SESSION (anti quota)
-# ─────────────────────────────
-if "cache" not in st.session_state:
-    st.session_state.cache = {}
-
-# ─────────────────────────────
-# AUTO REFRESH SAFE
-# ─────────────────────────────
-st_autorefresh(interval=90 * 1000, key="refresh")
-
-# ─────────────────────────────
-# SQLITE SIMPLE (dans même fichier)
-# ─────────────────────────────
-def init_db():
-    conn = sqlite3.connect("ai-bet.db")
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS matches (
-        id TEXT PRIMARY KEY,
-        home TEXT,
-        away TEXT,
-        date TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-def save_match(mid, home, away, date):
-    conn = sqlite3.connect("ai-bet.db")
-    cur = conn.cursor()
-
-    cur.execute("""
-    INSERT OR IGNORE INTO matches VALUES (?, ?, ?, ?)
-    """, (mid, home, away, date))
-
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# ─────────────────────────────
-# STYLE (inchangé simple)
-# ─────────────────────────────
-st.markdown("""
-<style>
-.match {
-    background: white;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-.team { font-weight: 600; }
-.score { font-weight: 800; }
-.box {
-    padding: 4px 8px;
-    background: #e9f5ff;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: bold;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────
-# POISSON MODEL (base)
+# POISSON MODEL
 # ─────────────────────────────
 def poisson_model():
     home_lambda = 1.6
     away_lambda = 1.2
 
     max_g = 6
-
     h = poisson.pmf(np.arange(max_g), home_lambda)
     a = poisson.pmf(np.arange(max_g), away_lambda)
 
-    m = np.outer(h, a)
+    matrix = np.outer(h, a)
 
-    p1 = np.sum(np.tril(m, -1)) * 100
-    px = np.sum(np.diag(m)) * 100
-    p2 = np.sum(np.triu(m, 1)) * 100
-    over25 = (1 - np.sum(m[:3, :3])) * 100
+    p1 = np.sum(np.tril(matrix, -1)) * 100
+    px = np.sum(np.diag(matrix)) * 100
+    p2 = np.sum(np.triu(matrix, 1)) * 100
+    over25 = (1 - np.sum(matrix[:3, :3])) * 100
 
     return {
         "1": round(p1, 1),
@@ -137,63 +106,20 @@ def poisson_model():
     }
 
 # ─────────────────────────────
-# API SAFE + CACHE + ANTI QUOTA
+# LOAD FIXTURES
 # ─────────────────────────────
-@st.cache_data(ttl=300)
-def get_fixtures(date_str):
-
-    if date_str in st.session_state.cache:
-        return st.session_state.cache[date_str]
-
-    if not API_KEY:
-        return []
-
-    url = f"https://v3.football.api-sports.io/fixtures?date={date_str}"
-
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": "v3.football.api-sports.io"
-    }
-
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
-
-        fixtures = data.get("response", [])
-
-        st.session_state.cache[date_str] = fixtures
-
-        return fixtures
-
-    except:
-        return []
-
-# ─────────────────────────────
-# UI
-# ─────────────────────────────
-st.title("⚽ AI-BETTING PRO")
-
-show_tomorrow = st.sidebar.checkbox("Demain")
-
-date = datetime.now(tz).date()
-if show_tomorrow:
-    date += timedelta(days=1)
-
-date_str = date.strftime("%Y-%m-%d")
-
-# ─────────────────────────────
-# DATA LOAD
-# ─────────────────────────────
+date_str = datetime.now(tz).strftime("%Y-%m-%d")
 fixtures = get_fixtures(date_str)
 
+# ─────────────────────────────
+# DISPLAY
+# ─────────────────────────────
 if not fixtures:
-    st.warning("Aucun match ou API indisponible")
+    st.warning("Aucun match disponible")
 else:
+    for m in fixtures:
 
-    for m in fixtures[:20]:
-
-        mid = str(m["fixture"]["id"])
-
+        mid = m["fixture"]["id"]
         home = m["teams"]["home"]["name"]
         away = m["teams"]["away"]["name"]
 
@@ -202,18 +128,9 @@ else:
 
         status = m["fixture"]["status"]["short"]
 
-        dt = datetime.fromisoformat(
-            m["fixture"]["date"].replace("Z", "+00:00")
-        ).astimezone(tz)
-
-        time = dt.strftime("%H:%M")
-
-        # SAVE INTO DB (silencieux)
-        save_match(mid, home, away, m["fixture"]["date"])
-
         st.markdown(f"""
         <div class="match">
-            <div>{time} | {status}</div>
+            <div>{status}</div>
             <div class="team">{home} vs {away}</div>
             <div class="score">{hg} - {ag}</div>
         </div>
