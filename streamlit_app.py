@@ -5,126 +5,121 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 import numpy as np
 from scipy.stats import poisson
+import sqlite3
 import os
 
 # ─────────────────────────────
 # CONFIG
 # ─────────────────────────────
-st.set_page_config(page_title="AI-BET • Livescore & Pronos", layout="wide")
+st.set_page_config(page_title="AI-BETTING PRO", layout="wide")
 
 tz = pytz.timezone("Africa/Bujumbura")
 
-ADMIN_PASSWORD = os.getenv(
-    "ADMIN_PASSWORD",
-    st.secrets.get("ADMIN_PASSWORD", "CHANGE_ME")
-)
-
-API_KEY = os.getenv(
-    "API_FOOTBALL_KEY",
-    st.secrets.get("API_FOOTBALL_KEY", "")
-)
+API_KEY = os.getenv("API_FOOTBALL_KEY", st.secrets.get("API_FOOTBALL_KEY", ""))
 
 # ─────────────────────────────
-# AUTO REFRESH
+# CACHE SESSION (anti quota)
 # ─────────────────────────────
-if "mode" not in st.session_state:
-    st.session_state.mode = "Client"
-
-if st.session_state.mode == "Client":
-    st_autorefresh(interval=90 * 1000, key="refresh")
+if "cache" not in st.session_state:
+    st.session_state.cache = {}
 
 # ─────────────────────────────
-# STYLE
+# AUTO REFRESH SAFE
+# ─────────────────────────────
+st_autorefresh(interval=90 * 1000, key="refresh")
+
+# ─────────────────────────────
+# SQLITE SIMPLE (dans même fichier)
+# ─────────────────────────────
+def init_db():
+    conn = sqlite3.connect("ai-bet.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS matches (
+        id TEXT PRIMARY KEY,
+        home TEXT,
+        away TEXT,
+        date TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def save_match(mid, home, away, date):
+    conn = sqlite3.connect("ai-bet.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT OR IGNORE INTO matches VALUES (?, ?, ?, ?)
+    """, (mid, home, away, date))
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# ─────────────────────────────
+# STYLE (inchangé simple)
 # ─────────────────────────────
 st.markdown("""
 <style>
-.stApp { background: #f8f9fa; }
-.match-card { background: white; border-radius: 8px; padding: 12px; margin-bottom: 12px;
-box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; gap: 12px; }
-
-.time-col { min-width: 70px; text-align: center; font-weight: bold; }
-.time { font-size: 1.1rem; }
-
-.status-live { color: #dc3545; font-weight: 900; }
-.status-fin { color: #6c757d; }
-
-.teams { flex-grow: 1; }
-
-.team-row { display: flex; justify-content: space-between; }
-
-.score { font-weight: 900; }
-
-.proba-box {
-background: #e9f5ff;
-border-radius: 6px;
-padding: 4px 8px;
-font-weight: bold;
-font-size: 0.85rem;
+.match {
+    background: white;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
-
-.win-border { border-left: 5px solid #28a745; }
-.loss-border { border-left: 5px solid #dc3545; }
-.wait-border { border-left: 5px solid #ffc107; }
+.team { font-weight: 600; }
+.score { font-weight: 800; }
+.box {
+    padding: 4px 8px;
+    background: #e9f5ff;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────
-# SIDEBAR
+# POISSON MODEL (base)
 # ─────────────────────────────
-with st.sidebar:
-    st.header("AI-BET")
+def poisson_model():
+    home_lambda = 1.6
+    away_lambda = 1.2
 
-    toggle = st.toggle("Mode Admin")
+    max_g = 6
 
-    if toggle:
-        pwd = st.text_input("Mot de passe", type="password")
+    h = poisson.pmf(np.arange(max_g), home_lambda)
+    a = poisson.pmf(np.arange(max_g), away_lambda)
 
-        if pwd == ADMIN_PASSWORD:
-            st.session_state.mode = "Admin"
-            st.success("Admin activé")
-        else:
-            st.session_state.mode = "Client"
-            if pwd:
-                st.error("Mot de passe incorrect")
-    else:
-        st.session_state.mode = "Client"
+    m = np.outer(h, a)
 
-    show_tomorrow = st.checkbox("Voir demain", value=False)
-
-# ─────────────────────────────
-# POISSON MODEL (AMÉLIORABLE)
-# ─────────────────────────────
-def get_poisson_proba(home, away):
-    # VERSION SIMPLIFIÉE (sera améliorée avec données réelles ensuite)
-
-    lambda_home = 1.6
-    lambda_away = 1.2
-
-    max_goals = 6
-
-    home_probs = poisson.pmf(np.arange(max_goals), lambda_home)
-    away_probs = poisson.pmf(np.arange(max_goals), lambda_away)
-
-    matrix = np.outer(home_probs, away_probs)
-
-    p_home = np.sum(np.tril(matrix, -1)) * 100
-    p_draw = np.sum(np.diag(matrix)) * 100
-    p_away = np.sum(np.triu(matrix, 1)) * 100
-
-    over25 = (1 - np.sum(matrix[:3, :3])) * 100
+    p1 = np.sum(np.tril(m, -1)) * 100
+    px = np.sum(np.diag(m)) * 100
+    p2 = np.sum(np.triu(m, 1)) * 100
+    over25 = (1 - np.sum(m[:3, :3])) * 100
 
     return {
-        "1": round(p_home, 1),
-        "X": round(p_draw, 1),
-        "2": round(p_away, 1),
-        "Over2.5": round(over25, 1)
+        "1": round(p1, 1),
+        "X": round(px, 1),
+        "2": round(p2, 1),
+        "O2.5": round(over25, 1)
     }
 
 # ─────────────────────────────
-# API FETCH
+# API SAFE + CACHE + ANTI QUOTA
 # ─────────────────────────────
-@st.cache_data(ttl=120)
-def fetch_fixtures(date_str):
+@st.cache_data(ttl=300)
+def get_fixtures(date_str):
+
+    if date_str in st.session_state.cache:
+        return st.session_state.cache[date_str]
+
     if not API_KEY:
         return []
 
@@ -139,129 +134,74 @@ def fetch_fixtures(date_str):
         r = requests.get(url, headers=headers, timeout=10)
         data = r.json()
 
-        if "response" in data:
-            return data["response"]
+        fixtures = data.get("response", [])
 
-        return []
+        st.session_state.cache[date_str] = fixtures
+
+        return fixtures
+
     except:
         return []
 
 # ─────────────────────────────
-# ADMIN MODE
+# UI
 # ─────────────────────────────
-if st.session_state.mode == "Admin":
-    st.subheader("Admin Panel")
+st.title("⚽ AI-BETTING PRO")
 
-    mid = st.text_input("Match ID")
-    prono = st.selectbox("Prono", ["1", "X", "2"])
+show_tomorrow = st.sidebar.checkbox("Demain")
 
-    if st.button("Save"):
-        if mid:
-            if "pronos" not in st.session_state:
-                st.session_state.pronos = {}
+date = datetime.now(tz).date()
+if show_tomorrow:
+    date += timedelta(days=1)
 
-            st.session_state.pronos[mid] = prono
-            st.success("Prono enregistré")
+date_str = date.strftime("%Y-%m-%d")
 
 # ─────────────────────────────
-# CLIENT VIEW
+# DATA LOAD
 # ─────────────────────────────
+fixtures = get_fixtures(date_str)
+
+if not fixtures:
+    st.warning("Aucun match ou API indisponible")
 else:
-    st.markdown("<h2 style='text-align:center;'>AI-BET LIVESCORE</h2>", unsafe_allow_html=True)
 
-    date = datetime.now(tz).date()
+    for m in fixtures[:20]:
 
-    if show_tomorrow:
-        date += timedelta(days=1)
+        mid = str(m["fixture"]["id"])
 
-    date_str = date.strftime("%Y-%m-%d")
+        home = m["teams"]["home"]["name"]
+        away = m["teams"]["away"]["name"]
 
-    fixtures = fetch_fixtures(date_str)
+        hg = m["goals"]["home"]
+        ag = m["goals"]["away"]
 
-    if not fixtures:
-        st.warning("Aucun match ou quota API atteint")
-    else:
+        status = m["fixture"]["status"]["short"]
 
-        live = []
-        upcoming = []
-        finished = []
+        dt = datetime.fromisoformat(
+            m["fixture"]["date"].replace("Z", "+00:00")
+        ).astimezone(tz)
 
-        for m in fixtures:
-            status = m["fixture"]["status"]["short"]
+        time = dt.strftime("%H:%M")
 
-            if status in ["1H", "HT", "2H"]:
-                live.append(m)
-            elif status == "NS":
-                upcoming.append(m)
-            else:
-                finished.append(m)
+        # SAVE INTO DB (silencieux)
+        save_match(mid, home, away, m["fixture"]["date"])
 
-        for group, title in [(live, "LIVE"), (upcoming, "UPCOMING"), (finished, "FINISHED")]:
+        st.markdown(f"""
+        <div class="match">
+            <div>{time} | {status}</div>
+            <div class="team">{home} vs {away}</div>
+            <div class="score">{hg} - {ag}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            if group:
-                st.subheader(title)
+        if status == "NS":
+            p = poisson_model()
 
-                for m in group:
-
-                    fid = str(m["fixture"]["id"])
-
-                    home = m["teams"]["home"]["name"]
-                    away = m["teams"]["away"]["name"]
-
-                    hg = m["goals"]["home"]
-                    ag = m["goals"]["away"]
-
-                    status = m["fixture"]["status"]["short"]
-
-                    dt = datetime.fromisoformat(
-                        m["fixture"]["date"].replace("Z", "+00:00")
-                    ).astimezone(tz)
-
-                    time = dt.strftime("%H:%M")
-
-                    border = "wait-border"
-
-                    prono_html = ""
-
-                    if "pronos" in st.session_state and fid in st.session_state["pronos"]:
-                        p = st.session_state["pronos"][fid]
-
-                        prono_html = f"<div class='proba-box'>{p}</div>"
-
-                        if status == "FT":
-                            result = "1" if hg > ag else ("2" if ag > hg else "X")
-                            border = "win-border" if p == result else "loss-border"
-
-                    proba_html = ""
-
-                    if status == "NS":
-                        proba = get_poisson_proba(home, away)
-
-                        proba_html = f"""
-                        <div style="display:flex; gap:5px; margin-top:5px;">
-                            <div class='proba-box'>{proba['1']}%</div>
-                            <div class='proba-box'>{proba['X']}%</div>
-                            <div class='proba-box'>{proba['2']}%</div>
-                            <div class='proba-box'>O2.5 {proba['Over2.5']}%</div>
-                        </div>
-                        """
-
-                    st.markdown(f"""
-                    <div class="match-card {border}">
-                        <div class="time-col">
-                            <div class="time">{time}</div>
-                        </div>
-
-                        <div class="teams">
-                            <div class="team-row">
-                                <span>{home}</span><span class="score">{hg}</span>
-                            </div>
-                            <div class="team-row">
-                                <span>{away}</span><span class="score">{ag}</span>
-                            </div>
-                            {proba_html}
-                        </div>
-
-                        {prono_html}
-                    </div>
-                    """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="display:flex; gap:6px;">
+                <div class="box">1 {p['1']}%</div>
+                <div class="box">X {p['X']}%</div>
+                <div class="box">2 {p['2']}%</div>
+                <div class="box">O2.5 {p['O2.5']}%</div>
+            </div>
+            """, unsafe_allow_html=True)
