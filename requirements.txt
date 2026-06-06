@@ -1,8 +1,7 @@
 streamlit
 requests
-pytz
-streamlit-autorefresh
 numpy
-scipy
 pandas
+scipy
 scikit-learn
+xgboost
