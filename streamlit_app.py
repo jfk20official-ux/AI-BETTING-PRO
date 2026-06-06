@@ -4,42 +4,57 @@ import pytz
 import numpy as np
 from scipy.stats import poisson
 from streamlit_autorefresh import st_autorefresh
+import random
 
 # ─────────────────────────────
 # CONFIG
 # ─────────────────────────────
-st.set_page_config(page_title="AI-BETTING PRO", layout="wide")
+st.set_page_config(page_title="AI SCORECAST FOREBET", layout="wide")
 tz = pytz.timezone("Africa/Bujumbura")
 
-# auto refresh
-st_autorefresh(interval=90 * 1000, key="refresh")
+st_autorefresh(interval=120 * 1000, key="refresh")
 
 # ─────────────────────────────
-# STYLE
+# STYLE (VERT PRO)
 # ─────────────────────────────
 st.markdown("""
 <style>
-.match {
-    background: white;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-.team { font-weight: 600; }
-.score { font-weight: 800; }
-.box {
-    padding: 4px 8px;
-    background: #e9f5ff;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: bold;
-}
 .title {
     text-align:center;
-    font-size:28px;
-    font-weight:800;
-    margin-bottom:20px;
+    font-size:32px;
+    font-weight:900;
+    color:#1DB954;
+    margin-bottom:25px;
+}
+
+.card {
+    background:white;
+    padding:14px;
+    margin:12px 0;
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.1);
+    border-left:6px solid #1DB954;
+}
+
+.team { font-weight:800; font-size:18px; }
+.score { font-weight:900; font-size:22px; margin-top:5px; }
+
+.box {
+    display:inline-block;
+    padding:6px 10px;
+    margin:4px 3px;
+    background:#e9fff0;
+    border-radius:8px;
+    font-weight:bold;
+    font-size:12px;
+    color:#0b6b2f;
+}
+
+.trend {
+    margin-top:6px;
+    font-size:13px;
+    color:#444;
+    font-style:italic;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -47,49 +62,50 @@ st.markdown("""
 # ─────────────────────────────
 # TITLE
 # ─────────────────────────────
-st.markdown("<div class='title'>⚽ AI-BETTING PRO</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>⚽ AI SCORECAST PRO • FOREBET ENGINE</div>", unsafe_allow_html=True)
 
 # ─────────────────────────────
-# FAKE MATCHES (SAFE DATA)
+# FIXTURES (SANS API = STABLE)
 # ─────────────────────────────
 def get_fixtures(date_str):
     return [
-        {
-            "fixture": {
-                "id": "1",
-                "date": "2026-06-06T18:00:00Z",
-                "status": {"short": "NS"}
-            },
-            "teams": {
-                "home": {"name": "FC Alpha"},
-                "away": {"name": "FC Beta"}
-            },
-            "goals": {"home": None, "away": None}
-        },
-        {
-            "fixture": {
-                "id": "2",
-                "date": "2026-06-06T20:00:00Z",
-                "status": {"short": "NS"}
-            },
-            "teams": {
-                "home": {"name": "Real Test"},
-                "away": {"name": "AI United"}
-            },
-            "goals": {"home": None, "away": None}
-        }
+        {"id":"1","home":"FC Alpha","away":"FC Beta"},
+        {"id":"2","home":"Real Test","away":"AI United"},
+        {"id":"3","home":"Green FC","away":"Future Stars"},
+        {"id":"4","home":"Burundi Stars","away":"City FC"},
+        {"id":"5","home":"River FC","away":"Mountain FC"}
     ]
 
 # ─────────────────────────────
-# POISSON MODEL
+# TEAM STRENGTH (SIMULATION FOREBET STYLE)
 # ─────────────────────────────
-def poisson_model():
-    home_lambda = 1.6
-    away_lambda = 1.2
+def team_strength(team):
+    seed = abs(hash(team)) % 1000
+    random.seed(seed)
 
-    max_g = 6
-    h = poisson.pmf(np.arange(max_g), home_lambda)
-    a = poisson.pmf(np.arange(max_g), away_lambda)
+    attack = random.uniform(1.0, 2.2)
+    defense = random.uniform(0.8, 2.0)
+
+    form = random.uniform(0.8, 1.2)  # forme récente simulée
+
+    return attack * form, defense
+
+# ─────────────────────────────
+# FOREBET-STYLE ENGINE
+# ─────────────────────────────
+def predict_match(home, away):
+
+    h_attack, h_def = team_strength(home)
+    a_attack, a_def = team_strength(away)
+
+    # home advantage (important)
+    home_lambda = (h_attack * 1.15 + a_def * 0.25)
+    away_lambda = (a_attack * 0.95 + h_def * 0.30)
+
+    max_goals = 6
+
+    h = poisson.pmf(np.arange(max_goals), home_lambda)
+    a = poisson.pmf(np.arange(max_goals), away_lambda)
 
     matrix = np.outer(h, a)
 
@@ -98,52 +114,54 @@ def poisson_model():
     p2 = np.sum(np.triu(matrix, 1)) * 100
     over25 = (1 - np.sum(matrix[:3, :3])) * 100
 
+    score_home = np.argmax(h)
+    score_away = np.argmax(a)
+
+    # FOREBET STYLE TREND ENGINE
+    if p1 > 47:
+        trend = "Strong home dominance expected"
+    elif p2 > 47:
+        trend = "Strong away performance expected"
+    elif over25 > 55:
+        trend = "High scoring match expected"
+    else:
+        trend = "Balanced match"
+
     return {
-        "1": round(p1, 1),
-        "X": round(px, 1),
-        "2": round(p2, 1),
-        "O2.5": round(over25, 1)
+        "1": round(p1,1),
+        "X": round(px,1),
+        "2": round(p2,1),
+        "O2.5": round(over25,1),
+        "score": f"{score_home}-{score_away}",
+        "trend": trend
     }
 
 # ─────────────────────────────
-# LOAD FIXTURES
+# LOAD DATA
 # ─────────────────────────────
 date_str = datetime.now(tz).strftime("%Y-%m-%d")
 fixtures = get_fixtures(date_str)
 
 # ─────────────────────────────
-# DISPLAY
+# DISPLAY ENGINE
 # ─────────────────────────────
-if not fixtures:
-    st.warning("Aucun match disponible")
-else:
-    for m in fixtures:
+for m in fixtures:
 
-        mid = m["fixture"]["id"]
-        home = m["teams"]["home"]["name"]
-        away = m["teams"]["away"]["name"]
+    p = predict_match(m["home"], m["away"])
 
-        hg = m["goals"]["home"]
-        ag = m["goals"]["away"]
+    st.markdown(f"""
+    <div class="card">
+        <div class="team">{m['home']} vs {m['away']}</div>
 
-        status = m["fixture"]["status"]["short"]
+        <div class="score">Predicted Score: {p['score']}</div>
 
-        st.markdown(f"""
-        <div class="match">
-            <div>{status}</div>
-            <div class="team">{home} vs {away}</div>
-            <div class="score">{hg} - {ag}</div>
+        <div class="trend">{p['trend']}</div>
+
+        <div>
+            <span class="box">1 {p['1']}%</span>
+            <span class="box">X {p['X']}%</span>
+            <span class="box">2 {p['2']}%</span>
+            <span class="box">O2.5 {p['O2.5']}%</span>
         </div>
-        """, unsafe_allow_html=True)
-
-        if status == "NS":
-            p = poisson_model()
-
-            st.markdown(f"""
-            <div style="display:flex; gap:6px;">
-                <div class="box">1 {p['1']}%</div>
-                <div class="box">X {p['X']}%</div>
-                <div class="box">2 {p['2']}%</div>
-                <div class="box">O2.5 {p['O2.5']}%</div>
-            </div>
-            """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
