@@ -4,9 +4,10 @@ import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
 
-# ─────────────────────────────
-# CONFIG
-# ─────────────────────────────
+# ==================================================
+# AIBET V2
+# ==================================================
+
 st.set_page_config(
     page_title="AiBet",
     page_icon="⚽",
@@ -16,9 +17,10 @@ st.set_page_config(
 API_KEY = st.secrets.get("API_FOOTBALL_KEY", "")
 ODDS_KEY = st.secrets.get("ODDS_API_KEY", "")
 
-# ─────────────────────────────
-# UI STYLE
-# ─────────────────────────────
+# ==================================================
+# STYLE
+# ==================================================
+
 st.markdown("""
 <style>
 
@@ -32,23 +34,23 @@ st.markdown("""
 .subtitle{
     text-align:center;
     color:#888;
-    margin-bottom:20px;
+    margin-bottom:25px;
     font-size:16px;
 }
 
 .card{
     background:white;
-    padding:15px;
-    margin:10px;
-    border-radius:12px;
-    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+    padding:18px;
+    margin:12px 0;
+    border-radius:14px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.08);
 }
 
 .badge{
-    padding:5px 8px;
-    border-radius:6px;
+    padding:6px 10px;
+    border-radius:8px;
     font-weight:700;
-    margin-right:4px;
+    margin-right:6px;
 }
 
 .green{
@@ -66,6 +68,17 @@ st.markdown("""
     color:#0b4f8a;
 }
 
+.orange{
+    background:#fff3cd;
+    color:#856404;
+}
+
+.value{
+    color:#00A651;
+    font-weight:900;
+    margin-top:8px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,205 +89,266 @@ Smarter Predictions. Better Decisions.
 </div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────
-# API MATCHES
-# ─────────────────────────────
-def fallback():
+# ==================================================
+# FALLBACK MATCHES
+# ==================================================
+
+def fallback_matches():
     return [
         {"teams":{"home":{"name":"FC Alpha"},"away":{"name":"FC Beta"}}},
-        {"teams":{"home":{"name":"Real Test"},"away":{"name":"AI United"}}}
+        {"teams":{"home":{"name":"Real Test"},"away":{"name":"AI United"}}},
+        {"teams":{"home":{"name":"Green FC"},"away":{"name":"Future Stars"}}},
+        {"teams":{"home":{"name":"Burundi Stars"},"away":{"name":"City FC"}}},
+        {"teams":{"home":{"name":"River FC"},"away":{"name":"Mountain FC"}}}
     ]
+
+# ==================================================
+# API FOOTBALL
+# ==================================================
 
 def get_matches():
 
     if not API_KEY:
-        return fallback()
-
-    url = "https://v3.football.api-sports.io/fixtures?next=10"
-
-    headers = {
-        "x-apisports-key": API_KEY
-    }
+        return fallback_matches()
 
     try:
-        r = requests.get(url, headers=headers, timeout=10).json()
-        return r.get("response", [])
-    except:
-        return fallback()
 
-# ─────────────────────────────
+        url = "https://v3.football.api-sports.io/fixtures?next=10"
+
+        headers = {
+            "x-apisports-key": API_KEY
+        }
+
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=10
+        )
+
+        data = r.json()
+
+        matches = data.get("response", [])
+
+        if not matches:
+            return fallback_matches()
+
+        return matches
+
+    except Exception:
+        return fallback_matches()
+
+# ==================================================
 # FEATURE ENGINE
-# ─────────────────────────────
+# ==================================================
+
 def features(home, away):
 
-    seed = abs(hash(home)) % 1000
-    np.random.seed(seed)
+    seed = abs(hash(home + away)) % 100000
 
-    h_attack = np.random.uniform(1.2, 2.5)
-    h_def = np.random.uniform(0.8, 2.0)
+    rng = np.random.default_rng(seed)
 
-    a_attack = np.random.uniform(1.0, 2.3)
-    a_def = np.random.uniform(0.8, 2.1)
+    h_attack = rng.uniform(1.2, 2.5)
+    a_attack = rng.uniform(1.0, 2.3)
 
-    elo_diff = np.random.uniform(-50, 50)
+    elo_diff = rng.uniform(-50, 50)
 
-    form = np.random.uniform(-1, 1)
+    form = rng.uniform(-1, 1)
 
-    return [h_attack, h_def, a_attack, a_def, elo_diff, form]
+    return [
+        h_attack,
+        a_attack,
+        elo_diff,
+        form
+    ]
 
-# ─────────────────────────────
-# MODEL TRAINING
-# ─────────────────────────────
+# ==================================================
+# TRAIN MODEL
+# ==================================================
+
 @st.cache_resource
 def train_model():
 
     data = []
 
+    rng = np.random.default_rng(42)
+
     for _ in range(3000):
 
-        h = np.random.uniform(1, 2.5)
-        a = np.random.uniform(1, 2.3)
+        h = rng.uniform(1.0, 2.5)
+        a = rng.uniform(1.0, 2.3)
 
-        elo = np.random.uniform(-50, 50)
-        form = np.random.uniform(-1, 1)
+        elo = rng.uniform(-50, 50)
+        form = rng.uniform(-1, 1)
 
-        label = np.random.choice([0, 1, 2])
+        label = rng.choice([0,1,2])
 
-        data.append([h, a, elo, form, label])
+        data.append([h,a,elo,form,label])
 
     df = pd.DataFrame(
         data,
-        columns=["h", "a", "elo", "form", "res"]
+        columns=[
+            "h_attack",
+            "a_attack",
+            "elo",
+            "form",
+            "result"
+        ]
     )
 
-    X = df[["h", "a", "elo", "form"]]
-    y = df["res"]
+    X = df[
+        [
+            "h_attack",
+            "a_attack",
+            "elo",
+            "form"
+        ]
+    ]
+
+    y = df["result"]
 
     model = XGBClassifier(
-        n_estimators=200,
+        n_estimators=100,
         max_depth=4,
-        learning_rate=0.05
+        learning_rate=0.05,
+        random_state=42
     )
 
     model.fit(X, y)
 
     return model
 
-model = train_model()
+try:
+    model = train_model()
 
-# ─────────────────────────────
-# ODDS API
-# ─────────────────────────────
-def get_odds():
+except Exception as e:
+    st.error(f"Erreur modèle : {e}")
+    st.stop()
 
-    if not ODDS_KEY:
-        return None
+# ==================================================
+# VALUE BET
+# ==================================================
 
-    try:
-        url = (
-            "https://api.the-odds-api.com/v4/sports/"
-            f"soccer/odds/?apiKey={ODDS_KEY}"
-            "&regions=eu&markets=h2h"
-        )
-
-        r = requests.get(url, timeout=10).json()
-
-        return r
-
-    except:
-        return None
-
-# ─────────────────────────────
-# VALUE BET ENGINE
-# ─────────────────────────────
-def value_bet(prob, odds):
+def value_bet(prob, odds=2.0):
 
     ev = (prob / 100) * odds
 
     return ev, ev > 1.05
 
-# ─────────────────────────────
-# PREDICTION ENGINE
-# ─────────────────────────────
+# ==================================================
+# PREDICT
+# ==================================================
+
 def predict(match):
 
     home = match["teams"]["home"]["name"]
     away = match["teams"]["away"]["name"]
 
-    f = features(home, away)
+    feats = features(home, away)
 
-    probs = model.predict_proba([f])[0]
+    probs = model.predict_proba([feats])[0]
 
-    p_draw = probs[0] * 100
-    p_away = probs[1] * 100
-    p_home = probs[2] * 100
+    p1 = float(probs[2] * 100)
+    px = float(probs[0] * 100)
+    p2 = float(probs[1] * 100)
 
-    score = f"{int(f[0])}-{int(f[2])}"
+    score_home = max(0, round(feats[0]))
+    score_away = max(0, round(feats[1]))
 
-    confidence = max(probs) * 100
+    score = f"{score_home}-{score_away}"
+
+    confidence = max(p1, px, p2)
 
     trend = "Balanced"
 
-    if p_home > 50:
+    if p1 > 50:
         trend = "Home strong"
 
-    elif p_away > 50:
+    elif p2 > 50:
         trend = "Away strong"
 
-    value = ""
+    value_text = ""
 
-    ev, ok = value_bet(p_home, 2.0)
+    ev, ok = value_bet(max(p1, p2))
 
     if ok:
-        value = "💰 VALUE BET DETECTED"
+
+        if p1 > p2:
+            value_text = "💰 VALUE BET: HOME WIN"
+
+        else:
+            value_text = "💰 VALUE BET: AWAY WIN"
 
     return (
         home,
         away,
-        p_home,
-        p_draw,
-        p_away,
+        p1,
+        px,
+        p2,
         score,
         confidence,
         trend,
-        value
+        value_text
     )
 
-# ─────────────────────────────
+# ==================================================
 # UI
-# ─────────────────────────────
+# ==================================================
+
 matches = get_matches()
 
-for m in matches[:8]:
+st.write(f"📊 Matches loaded: {len(matches)}")
 
-    (
-        h,
-        a,
-        ph,
-        pd,
-        pa,
-        score,
-        conf,
-        trend,
-        value
-    ) = predict(m)
+for match in matches[:10]:
 
-    st.markdown(f"""
-    <div class="card">
+    try:
 
-        <h3>{h} vs {a}</h3>
+        (
+            home,
+            away,
+            p1,
+            px,
+            p2,
+            score,
+            confidence,
+            trend,
+            value
+        ) = predict(match)
 
-        <h2>{score}</h2>
+        st.markdown(f"""
+        <div class="card">
 
-        <p>{trend} • Confidence {round(conf,1)}%</p>
+            <h3>{home} vs {away}</h3>
 
-        <div>
-            <span class="badge green">1: {round(ph,1)}%</span>
-            <span class="badge blue">X: {round(pd,1)}%</span>
-            <span class="badge red">2: {round(pa,1)}%</span>
+            <h2>Predicted Score: {score}</h2>
+
+            <p>
+            {trend}
+            • Confidence {confidence:.1f}%
+            </p>
+
+            <div>
+                <span class="badge green">
+                1: {p1:.1f}%
+                </span>
+
+                <span class="badge orange">
+                X: {px:.1f}%
+                </span>
+
+                <span class="badge red">
+                2: {p2:.1f}%
+                </span>
+            </div>
+
+            <div class="value">
+                {value}
+            </div>
+
         </div>
+        """, unsafe_allow_html=True)
 
-        <h4 style="color:green;">{value}</h4>
+    except Exception as e:
 
-    </div>
-    """, unsafe_allow_html=True)
+        st.error(
+            f"Erreur sur un match : {e}"
+        )
