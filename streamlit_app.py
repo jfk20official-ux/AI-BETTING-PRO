@@ -3,12 +3,15 @@ import requests
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
 
 # ─────────────────────────────
 # CONFIG
 # ─────────────────────────────
-st.set_page_config(page_title="AI SCORECAST PRO MAX", layout="wide")
+st.set_page_config(
+    page_title="AiBet",
+    page_icon="⚽",
+    layout="wide"
+)
 
 API_KEY = st.secrets.get("API_FOOTBALL_KEY", "")
 ODDS_KEY = st.secrets.get("ODDS_API_KEY", "")
@@ -18,27 +21,80 @@ ODDS_KEY = st.secrets.get("ODDS_API_KEY", "")
 # ─────────────────────────────
 st.markdown("""
 <style>
-.title{font-size:34px;text-align:center;font-weight:900;color:#1DB954}
-.card{background:white;padding:15px;margin:10px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
-.badge{padding:5px 8px;border-radius:6px;font-weight:700;margin-right:4px}
-.green{background:#d4edda;color:#155724}
-.red{background:#f8d7da;color:#721c24}
-.blue{background:#d9ecff;color:#0b4f8a}
+
+.title{
+    font-size:42px;
+    text-align:center;
+    font-weight:900;
+    color:#00D26A;
+}
+
+.subtitle{
+    text-align:center;
+    color:#888;
+    margin-bottom:20px;
+    font-size:16px;
+}
+
+.card{
+    background:white;
+    padding:15px;
+    margin:10px;
+    border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+.badge{
+    padding:5px 8px;
+    border-radius:6px;
+    font-weight:700;
+    margin-right:4px;
+}
+
+.green{
+    background:#d4edda;
+    color:#155724;
+}
+
+.red{
+    background:#f8d7da;
+    color:#721c24;
+}
+
+.blue{
+    background:#d9ecff;
+    color:#0b4f8a;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='title'>⚽ AI SCORECAST PRO MAX ENGINE</div>", unsafe_allow_html=True)
+st.markdown("""
+<div class='title'>⚽ AiBet</div>
+<div class='subtitle'>
+Smarter Predictions. Better Decisions.
+</div>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────
 # API MATCHES
 # ─────────────────────────────
+def fallback():
+    return [
+        {"teams":{"home":{"name":"FC Alpha"},"away":{"name":"FC Beta"}}},
+        {"teams":{"home":{"name":"Real Test"},"away":{"name":"AI United"}}}
+    ]
+
 def get_matches():
 
     if not API_KEY:
         return fallback()
 
     url = "https://v3.football.api-sports.io/fixtures?next=10"
-    headers = {"x-apisports-key": API_KEY}
+
+    headers = {
+        "x-apisports-key": API_KEY
+    }
 
     try:
         r = requests.get(url, headers=headers, timeout=10).json()
@@ -46,14 +102,8 @@ def get_matches():
     except:
         return fallback()
 
-def fallback():
-    return [
-        {"teams":{"home":{"name":"FC Alpha"},"away":{"name":"FC Beta"}}},
-        {"teams":{"home":{"name":"Real Test"},"away":{"name":"AI United"}}}
-    ]
-
 # ─────────────────────────────
-# FEATURE ENGINE (ELO + FORM SIMULÉ)
+# FEATURE ENGINE
 # ─────────────────────────────
 def features(home, away):
 
@@ -73,27 +123,31 @@ def features(home, away):
     return [h_attack, h_def, a_attack, a_def, elo_diff, form]
 
 # ─────────────────────────────
-# DATASET TRAINING (SIMULÉ MAIS STRUCTURÉ)
+# MODEL TRAINING
 # ─────────────────────────────
+@st.cache_resource
 def train_model():
 
     data = []
 
     for _ in range(3000):
 
-        h = np.random.uniform(1,2.5)
-        a = np.random.uniform(1,2.3)
+        h = np.random.uniform(1, 2.5)
+        a = np.random.uniform(1, 2.3)
 
-        elo = np.random.uniform(-50,50)
-        form = np.random.uniform(-1,1)
+        elo = np.random.uniform(-50, 50)
+        form = np.random.uniform(-1, 1)
 
-        label = np.random.choice([0,1,2])
+        label = np.random.choice([0, 1, 2])
 
-        data.append([h,a,elo,form,label])
+        data.append([h, a, elo, form, label])
 
-    df = pd.DataFrame(data, columns=["h","a","elo","form","res"])
+    df = pd.DataFrame(
+        data,
+        columns=["h", "a", "elo", "form", "res"]
+    )
 
-    X = df[["h","a","elo","form"]]
+    X = df[["h", "a", "elo", "form"]]
     y = df["res"]
 
     model = XGBClassifier(
@@ -112,27 +166,35 @@ model = train_model()
 # ODDS API
 # ─────────────────────────────
 def get_odds():
+
     if not ODDS_KEY:
         return None
 
     try:
-        url = f"https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey={ODDS_KEY}&regions=eu&markets=h2h"
+        url = (
+            "https://api.the-odds-api.com/v4/sports/"
+            f"soccer/odds/?apiKey={ODDS_KEY}"
+            "&regions=eu&markets=h2h"
+        )
+
         r = requests.get(url, timeout=10).json()
+
         return r
+
     except:
         return None
 
 # ─────────────────────────────
-# VALUE BET ENGINE 💰
+# VALUE BET ENGINE
 # ─────────────────────────────
 def value_bet(prob, odds):
 
-    ev = (prob/100) * odds
+    ev = (prob / 100) * odds
 
     return ev, ev > 1.05
 
 # ─────────────────────────────
-# PREDICT ENGINE
+# PREDICTION ENGINE
 # ─────────────────────────────
 def predict(match):
 
@@ -152,17 +214,31 @@ def predict(match):
     confidence = max(probs) * 100
 
     trend = "Balanced"
+
     if p_home > 50:
         trend = "Home strong"
+
     elif p_away > 50:
         trend = "Away strong"
 
     value = ""
+
     ev, ok = value_bet(p_home, 2.0)
+
     if ok:
         value = "💰 VALUE BET DETECTED"
 
-    return home, away, p_home, p_draw, p_away, score, confidence, trend, value
+    return (
+        home,
+        away,
+        p_home,
+        p_draw,
+        p_away,
+        score,
+        confidence,
+        trend,
+        value
+    )
 
 # ─────────────────────────────
 # UI
@@ -171,7 +247,17 @@ matches = get_matches()
 
 for m in matches[:8]:
 
-    h, a, ph, pd, pa, score, conf, trend, value = predict(m)
+    (
+        h,
+        a,
+        ph,
+        pd,
+        pa,
+        score,
+        conf,
+        trend,
+        value
+    ) = predict(m)
 
     st.markdown(f"""
     <div class="card">
