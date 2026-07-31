@@ -1,354 +1,1029 @@
 import streamlit as st
 import requests
+import os
 import numpy as np
 import pandas as pd
-from xgboost import XGBClassifier
+import pytz
 
-# ==================================================
-# AIBET V2
-# ==================================================
+from datetime import datetime, timedelta
+from scipy.stats import poisson
+from streamlit_autorefresh import st_autorefresh
+
+
+# ==========================================================
+# CONFIGURATION APPLICATION
+# ==========================================================
 
 st.set_page_config(
-    page_title="AiBet",
+    page_title="AI-BET PRO",
     page_icon="⚽",
     layout="wide"
 )
 
-API_KEY = st.secrets.get("API_FOOTBALL_KEY", "")
-ODDS_KEY = st.secrets.get("ODDS_API_KEY", "")
 
-# ==================================================
-# STYLE
-# ==================================================
+# ==========================================================
+# SECRETS
+# ==========================================================
+
+try:
+    API_KEY = os.getenv(
+        "API_FOOTBALL_KEY",
+        st.secrets["API_FOOTBALL_KEY"]
+    )
+except:
+    API_KEY = ""
+
+try:
+    ADMIN_PASSWORD = os.getenv(
+        "ADMIN_PASSWORD",
+        st.secrets["ADMIN_PASSWORD"]
+    )
+except:
+    ADMIN_PASSWORD = "CHANGE_ME"
+
+
+TZ = pytz.timezone("Africa/Bujumbura")
+
+
+# ==========================================================
+# SESSION
+# ==========================================================
+
+if "mode" not in st.session_state:
+    st.session_state.mode = "Client"
+
+if "pronos" not in st.session_state:
+    st.session_state.pronos = {}
+
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+
+# Refresh automatique client
+
+if st.session_state.mode == "Client":
+    st_autorefresh(
+        interval=90000,
+        key="aibet_refresh"
+    )
+
+
+# ==========================================================
+# DESIGN AI-BET
+# ==========================================================
 
 st.markdown("""
 <style>
 
-.title{
-    font-size:42px;
+body {
+    background:#f5f7fa;
+}
+
+.main-title {
     text-align:center;
-    font-weight:900;
-    color:#00D26A;
-}
-
-.subtitle{
-    text-align:center;
-    color:#888;
-    margin-bottom:25px;
-    font-size:16px;
-}
-
-.card{
-    background:white;
-    padding:18px;
-    margin:12px 0;
-    border-radius:14px;
-    box-shadow:0 2px 12px rgba(0,0,0,0.08);
-}
-
-.badge{
-    padding:6px 10px;
-    border-radius:8px;
-    font-weight:700;
-    margin-right:6px;
-}
-
-.green{
-    background:#d4edda;
-    color:#155724;
-}
-
-.red{
-    background:#f8d7da;
-    color:#721c24;
-}
-
-.blue{
-    background:#d9ecff;
-    color:#0b4f8a;
-}
-
-.orange{
-    background:#fff3cd;
-    color:#856404;
-}
-
-.value{
     color:#00A651;
+    font-size:38px;
     font-weight:900;
-    margin-top:8px;
 }
+
+.subtitle {
+    text-align:center;
+    color:#555;
+    font-size:18px;
+}
+
+
+.match-card {
+
+background:white;
+border-radius:15px;
+padding:18px;
+margin-bottom:15px;
+box-shadow:0 4px 15px rgba(0,0,0,0.08);
+
+}
+
+
+.team {
+
+font-weight:700;
+font-size:18px;
+
+}
+
+
+.score {
+
+font-size:25px;
+font-weight:900;
+color:#00A651;
+
+}
+
+
+.badge {
+
+padding:8px;
+border-radius:10px;
+font-weight:bold;
+margin:3px;
+display:inline-block;
+
+}
+
+
+.home {
+
+background:#d4edda;
+color:#155724;
+
+}
+
+
+.draw {
+
+background:#fff3cd;
+color:#856404;
+
+}
+
+
+.away {
+
+background:#f8d7da;
+color:#721c24;
+
+}
+
+
+.safe {
+
+background:#00A651;
+color:white;
+padding:8px;
+border-radius:10px;
+
+}
+
+
+.risk {
+
+background:#dc3545;
+color:white;
+padding:8px;
+border-radius:10px;
+
+}
+
+
+.value {
+
+background:#111;
+color:#00ff88;
+padding:10px;
+border-radius:10px;
+font-weight:bold;
+
+}
+
 
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div class='title'>⚽ AiBet</div>
-<div class='subtitle'>
-Smarter Predictions. Better Decisions.
+
+
+# ==========================================================
+# TITRE
+# ==========================================================
+
+st.markdown(
+"""
+<div class="main-title">
+⚽ AI-BET PRO
 </div>
-""", unsafe_allow_html=True)
 
-# ==================================================
-# FALLBACK MATCHES
-# ==================================================
+<div class="subtitle">
+Smarter Predictions. Better Decisions. 📊
+</div>
+""",
+unsafe_allow_html=True
+)
 
-def fallback_matches():
-    return [
-        {"teams":{"home":{"name":"FC Alpha"},"away":{"name":"FC Beta"}}},
-        {"teams":{"home":{"name":"Real Test"},"away":{"name":"AI United"}}},
-        {"teams":{"home":{"name":"Green FC"},"away":{"name":"Future Stars"}}},
-        {"teams":{"home":{"name":"Burundi Stars"},"away":{"name":"City FC"}}},
-        {"teams":{"home":{"name":"River FC"},"away":{"name":"Mountain FC"}}}
-    ]
 
-# ==================================================
+# ==========================================================
+# SIDEBAR ADMIN
+# ==========================================================
+
+with st.sidebar:
+
+    st.header("⚽ AI-BET CONTROL")
+
+    admin = st.toggle("Mode Admin")
+
+    if admin:
+
+        password = st.text_input(
+            "Mot de passe",
+            type="password"
+        )
+
+        if password == ADMIN_PASSWORD:
+
+            st.session_state.mode="Admin"
+
+            st.success(
+                "Administrateur connecté"
+            )
+
+        elif password:
+
+            st.error(
+                "Mot de passe incorrect"
+            )
+
+    else:
+
+        st.session_state.mode="Client"
+
+
+
+    tomorrow = st.checkbox(
+        "Afficher demain"
+    )
+
+
+
+# ==========================================================
 # API FOOTBALL
-# ==================================================
+# ==========================================================
 
-def get_matches():
+@st.cache_data(ttl=120)
+def fetch_fixtures(date_value):
 
     if not API_KEY:
-        return fallback_matches()
+        return []
+
+    url = (
+        "https://v3.football.api-sports.io/"
+        f"fixtures?date={date_value}"
+    )
+
+    headers = {
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host":
+        "v3.football.api-sports.io"
+    }
+
 
     try:
 
-        url = "https://v3.football.api-sports.io/fixtures?next=10"
-
-        headers = {
-            "x-apisports-key": API_KEY
-        }
-
-        r = requests.get(
+        response = requests.get(
             url,
             headers=headers,
             timeout=10
         )
 
-        data = r.json()
+        data = response.json()
 
-        matches = data.get("response", [])
+        if "response" in data:
+            return data["response"]
 
-        if not matches:
-            return fallback_matches()
+        return []
 
-        return matches
 
     except Exception:
-        return fallback_matches()
 
-# ==================================================
-# FEATURE ENGINE
-# ==================================================
+        return []
 
-def features(home, away):
 
-    seed = abs(hash(home + away)) % 100000
 
-    rng = np.random.default_rng(seed)
+# ==========================================================
+# AI TEAM STRENGTH ENGINE
+# ==========================================================
 
-    h_attack = rng.uniform(1.2, 2.5)
-    a_attack = rng.uniform(1.0, 2.3)
+def team_strength(team_name):
 
-    elo_diff = rng.uniform(-50, 50)
+    """
+    Simulation intelligente temporaire.
+    Prête à recevoir:
+    - classement
+    - forme
+    - H2H
+    - statistiques API
+    """
 
-    form = rng.uniform(-1, 1)
+    seed = sum(
+        ord(c)
+        for c in team_name
+    )
 
-    return [
-        h_attack,
-        a_attack,
-        elo_diff,
-        form
-    ]
+    np.random.seed(seed)
 
-# ==================================================
-# TRAIN MODEL
-# ==================================================
+    attack = np.random.uniform(
+        0.8,
+        2.4
+    )
 
-@st.cache_resource
-def train_model():
+    defense = np.random.uniform(
+        0.7,
+        1.8
+    )
 
-    data = []
+    return attack, defense
 
-    rng = np.random.default_rng(42)
 
-    for _ in range(3000):
 
-        h = rng.uniform(1.0, 2.5)
-        a = rng.uniform(1.0, 2.3)
+# ==========================================================
+# POISSON AI MODEL
+# ==========================================================
 
-        elo = rng.uniform(-50, 50)
-        form = rng.uniform(-1, 1)
+def poisson_prediction(home, away):
 
-        label = rng.choice([0,1,2])
 
-        data.append([h,a,elo,form,label])
+    home_attack, home_defense = (
+        team_strength(home)
+    )
+
+    away_attack, away_defense = (
+        team_strength(away)
+    )
+
+
+    # Buts attendus
+
+    lambda_home = (
+        home_attack *
+        (2 - away_defense/2)
+    )
+
+
+    lambda_away = (
+        away_attack *
+        (2 - home_defense/2)
+    )
+
+
+    lambda_home = max(
+        0.3,
+        min(lambda_home,4)
+    )
+
+    lambda_away = max(
+        0.3,
+        min(lambda_away,4)
+    )
+
+
+
+    max_goals = 6
+
+
+    matrix = np.outer(
+        poisson.pmf(
+            np.arange(max_goals+1),
+            lambda_home
+        ),
+
+        poisson.pmf(
+            np.arange(max_goals+1),
+            lambda_away
+        )
+    )
+
+
+
+    # Probabilités résultat
+
+
+    home_win = (
+        np.tril(matrix,-1).sum()
+        *100
+    )
+
+
+    draw = (
+        np.diag(matrix).sum()
+        *100
+    )
+
+
+    away_win = (
+        np.triu(matrix,1).sum()
+        *100
+    )
+
+
+    # Score exact
+
+    index = np.unravel_index(
+        np.argmax(matrix),
+        matrix.shape
+    )
+
+
+    score = (
+        f"{index[0]}-{index[1]}"
+    )
+
+
+
+    # Over 2.5
+
+
+    under25 = 0
+
+    for h in range(3):
+        for a in range(3-h):
+            under25 += matrix[h][a]
+
+
+    over25 = (
+        1-under25
+    )*100
+
+
+
+    # BTTS
+
+
+    btts = (
+        1 -
+        matrix[0,:].sum()
+        -
+        matrix[:,0].sum()
+        +
+        matrix[0,0]
+    )*100
+
+
+
+    confidence = max(
+        home_win,
+        draw,
+        away_win
+    )
+
+
+    return {
+
+        "score":score,
+
+        "1":round(
+            home_win,
+            1
+        ),
+
+        "X":round(
+            draw,
+            1
+        ),
+
+        "2":round(
+            away_win,
+            1
+        ),
+
+        "over25":round(
+            over25,
+            1
+        ),
+
+        "btts":round(
+            btts,
+            1
+        ),
+
+        "confidence":round(
+            confidence,
+            1
+        )
+
+    }
+
+
+
+# ==========================================================
+# VALUE BET ENGINE
+# ==========================================================
+
+def value_engine(probability, odd=None):
+
+
+    if not odd:
+
+        return {
+            "value":False,
+            "message":
+            "Cote non disponible"
+        }
+
+
+
+    expected = (
+        probability/100
+    )*odd
+
+
+
+    if expected > 1.05:
+
+        return {
+
+            "value":True,
+
+            "message":
+            "💰 VALUE BET DETECTED"
+
+        }
+
+
+    return {
+
+        "value":False,
+
+        "message":
+        "Pas de value"
+
+    }
+
+
+
+# ==========================================================
+# TOP PICK ENGINE
+# ==========================================================
+
+def ai_signal(data):
+
+
+    conf = data["confidence"]
+
+
+    if conf >=70:
+
+        return (
+            "🔥 SAFE PICK",
+            "safe"
+        )
+
+
+    elif conf >=55:
+
+        return (
+            "⚠️ MEDIUM RISK",
+            "safe"
+        )
+
+
+    else:
+
+        return (
+            "❌ HIGH RISK",
+            "risk"
+        )
+
+
+
+
+# ==========================================================
+# ADMIN PANEL
+# ==========================================================
+
+if st.session_state.mode == "Admin":
+
+
+    st.subheader(
+        "🛠️ AI-BET ADMIN PANEL"
+    )
+
+
+    match_id = st.text_input(
+        "ID du match"
+    )
+
+
+    prediction = st.selectbox(
+        "Pronostic manuel",
+        [
+            "1",
+            "X",
+            "2"
+        ]
+    )
+
+
+    if st.button(
+        "Enregistrer le pronostic"
+    ):
+
+        if match_id:
+
+            st.session_state.pronos[
+                match_id
+            ] = prediction
+
+
+            st.success(
+                "Pronostic enregistré"
+            )
+
+
+
+# ==========================================================
+# CLIENT DASHBOARD
+# ==========================================================
+
+else:
+
+
+    st.subheader(
+        "⚽ Matchs & Prédictions IA"
+    )
+
+
+    today = datetime.now(
+        TZ
+    ).date()
+
+
+    if tomorrow:
+
+        today += timedelta(
+            days=1
+        )
+
+
+    date_api = today.strftime(
+        "%Y-%m-%d"
+    )
+
+
+    fixtures = fetch_fixtures(
+        date_api
+    )
+
+
+
+    if not fixtures:
+
+
+        st.warning(
+            "Aucun match trouvé ou API indisponible"
+        )
+
+
+    else:
+
+
+        predictions_today = []
+
+
+
+        # ===============================
+        # CALCUL DES PRONOSTICS
+        # ===============================
+
+
+        for match in fixtures:
+
+
+            status = (
+                match["fixture"]
+                ["status"]
+                ["short"]
+            )
+
+
+            if status != "NS":
+
+                continue
+
+
+
+            home = (
+                match["teams"]
+                ["home"]
+                ["name"]
+            )
+
+
+            away = (
+                match["teams"]
+                ["away"]
+                ["name"]
+            )
+
+
+
+            prediction = poisson_prediction(
+                home,
+                away
+            )
+
+
+            signal, css = ai_signal(
+                prediction
+            )
+
+
+            predictions_today.append({
+
+                "home":home,
+
+                "away":away,
+
+                "data":prediction,
+
+                "signal":signal
+
+            })
+
+
+
+        # ===============================
+        # TOP PICKS
+        # ===============================
+
+
+        if predictions_today:
+
+
+            st.markdown(
+                "## 🔥 AI-BET TOP PICKS"
+            )
+
+
+            top = sorted(
+                predictions_today,
+                key=lambda x:
+                x["data"]["confidence"],
+                reverse=True
+            )[:5]
+
+
+
+            for item in top:
+
+
+                st.info(
+
+                    f"""
+                    ⚽ {item['home']}
+                    vs
+                    {item['away']}
+
+                    Score:
+                    {item['data']['score']}
+
+                    Confiance:
+                    {item['data']['confidence']}%
+
+                    {item['signal']}
+                    """
+
+                )
+
+
+
+        st.divider()
+
+
+
+        # ===============================
+        # MATCH CARDS
+        # ===============================
+
+
+        st.markdown(
+            "## 📊 ANALYSE DES MATCHS"
+        )
+
+
+        for item in predictions_today:
+
+
+            home = item["home"]
+
+            away = item["away"]
+
+            data = item["data"]
+
+
+            signal, css = ai_signal(
+                data
+            )
+
+
+
+            st.markdown(
+
+            f"""
+
+            <div class="match-card">
+
+
+            <div class="team">
+
+            ⚽ {home}
+            <br>
+            🆚
+            <br>
+            ⚽ {away}
+
+            </div>
+
+
+            <hr>
+
+
+            <div class="score">
+
+            Prediction:
+            {data['score']}
+
+            </div>
+
+
+            <br>
+
+
+            <span class="badge home">
+            1:
+            {data['1']}%
+            </span>
+
+
+            <span class="badge draw">
+            X:
+            {data['X']}%
+            </span>
+
+
+            <span class="badge away">
+            2:
+            {data['2']}%
+            </span>
+
+
+            <br><br>
+
+
+            <span class="badge">
+            Over 2.5:
+            {data['over25']}%
+            </span>
+
+
+            <span class="badge">
+            BTTS:
+            {data['btts']}%
+            </span>
+
+
+            <br><br>
+
+
+            <span class="{css}">
+            {signal}
+            </span>
+
+
+            </div>
+
+
+            """,
+
+            unsafe_allow_html=True
+
+            )
+
+
+
+            # Sauvegarde historique
+
+            st.session_state.history.append({
+
+                "match":
+                f"{home}-{away}",
+
+                "score":
+                data["score"],
+
+                "confidence":
+                data["confidence"]
+
+            })
+
+
+# ==========================================================
+# PARTIE 4/4
+# BACKTESTING + STATISTICS + FINALIZATION
+# ==========================================================
+
+
+# ==========================================================
+# PERFORMANCE DASHBOARD
+# ==========================================================
+
+st.divider()
+
+
+st.subheader(
+    "📈 AI-BET PERFORMANCE"
+)
+
+
+total_predictions = len(
+    st.session_state.history
+)
+
+
+if total_predictions > 0:
+
 
     df = pd.DataFrame(
-        data,
-        columns=[
-            "h_attack",
-            "a_attack",
-            "elo",
-            "form",
-            "result"
-        ]
+        st.session_state.history
     )
 
-    X = df[
-        [
-            "h_attack",
-            "a_attack",
-            "elo",
-            "form"
-        ]
-    ]
 
-    y = df["result"]
+    col1, col2, col3 = st.columns(3)
 
-    model = XGBClassifier(
-        n_estimators=100,
-        max_depth=4,
-        learning_rate=0.05,
-        random_state=42
-    )
 
-    model.fit(X, y)
+    with col1:
 
-    return model
-
-try:
-    model = train_model()
-
-except Exception as e:
-    st.error(f"Erreur modèle : {e}")
-    st.stop()
-
-# ==================================================
-# VALUE BET
-# ==================================================
-
-def value_bet(prob, odds=2.0):
-
-    ev = (prob / 100) * odds
-
-    return ev, ev > 1.05
-
-# ==================================================
-# PREDICT
-# ==================================================
-
-def predict(match):
-
-    home = match["teams"]["home"]["name"]
-    away = match["teams"]["away"]["name"]
-
-    feats = features(home, away)
-
-    probs = model.predict_proba([feats])[0]
-
-    p1 = float(probs[2] * 100)
-    px = float(probs[0] * 100)
-    p2 = float(probs[1] * 100)
-
-    score_home = max(0, round(feats[0]))
-    score_away = max(0, round(feats[1]))
-
-    score = f"{score_home}-{score_away}"
-
-    confidence = max(p1, px, p2)
-
-    trend = "Balanced"
-
-    if p1 > 50:
-        trend = "Home strong"
-
-    elif p2 > 50:
-        trend = "Away strong"
-
-    value_text = ""
-
-    ev, ok = value_bet(max(p1, p2))
-
-    if ok:
-
-        if p1 > p2:
-            value_text = "💰 VALUE BET: HOME WIN"
-
-        else:
-            value_text = "💰 VALUE BET: AWAY WIN"
-
-    return (
-        home,
-        away,
-        p1,
-        px,
-        p2,
-        score,
-        confidence,
-        trend,
-        value_text
-    )
-
-# ==================================================
-# UI
-# ==================================================
-
-matches = get_matches()
-
-st.write(f"📊 Matches loaded: {len(matches)}")
-
-for match in matches[:10]:
-
-    try:
-
-        (
-            home,
-            away,
-            p1,
-            px,
-            p2,
-            score,
-            confidence,
-            trend,
-            value
-        ) = predict(match)
-
-        st.markdown(f"""
-        <div class="card">
-
-            <h3>{home} vs {away}</h3>
-
-            <h2>Predicted Score: {score}</h2>
-
-            <p>
-            {trend}
-            • Confidence {confidence:.1f}%
-            </p>
-
-            <div>
-                <span class="badge green">
-                1: {p1:.1f}%
-                </span>
-
-                <span class="badge orange">
-                X: {px:.1f}%
-                </span>
-
-                <span class="badge red">
-                2: {p2:.1f}%
-                </span>
-            </div>
-
-            <div class="value">
-                {value}
-            </div>
-
-        </div>
-        """, unsafe_allow_html=True)
-
-    except Exception as e:
-
-        st.error(
-            f"Erreur sur un match : {e}"
+        st.metric(
+            "Prédictions",
+            total_predictions
         )
+
+
+    with col2:
+
+        avg_conf = round(
+            df["confidence"]
+            .mean(),
+            1
+        )
+
+        st.metric(
+            "Confiance moyenne",
+            f"{avg_conf}%"
+        )
+
+
+    with col3:
+
+        st.metric(
+            "Moteur",
+            "Poisson AI"
+        )
+
+
+    with st.expander(
+        "Voir historique"
+    ):
+
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
+
+
+else:
+
+
+    st.info(
+        "Pas encore d'historique disponible"
+    )
+
+
+
+# ==========================================================
+# FOOTER AI-BET
+# ==========================================================
+
+
+st.markdown(
+"""
+<br><br>
+
+<div style="
+text-align:center;
+color:#777;
+font-size:14px;
+">
+
+⚽ AI-BET PRO ENGINE V2  
+<br>
+Smarter Predictions. Better Decisions.
+
+<br>
+
+Powered by:
+Poisson Model • AI Engine • Football Data
+
+</div>
+
+""",
+unsafe_allow_html=True
+)
+
